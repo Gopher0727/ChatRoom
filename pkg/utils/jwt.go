@@ -1,0 +1,65 @@
+package utils
+
+import (
+	"errors"
+	"time"
+
+	jwt "github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	ErrInvalidToken = errors.New("invalid token")
+	ErrExpiredToken = errors.New("token expired")
+	jwtSecret       = []byte("your-secret-key-change-in-production") // 生产环境应从配置读取
+)
+
+// Claims JWT 声明
+type Claims struct {
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	jwt.RegisteredClaims
+}
+
+// GenerateToken 生成 JWT token
+func GenerateToken(userID uint, username string, email string) (string, error) {
+	claims := &Claims{
+		UserID:   userID,
+		Username: username,
+		Email:    email,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+// ParseToken 解析JWT token
+func ParseToken(tokenString string) (*Claims, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, ErrInvalidToken
+	}
+
+	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(time.Now()) {
+		return nil, ErrExpiredToken
+	}
+
+	return claims, nil
+}
+
+// SetJWTSecret 设置JWT密钥（用于配置）
+func SetJWTSecret(secret string) {
+	jwtSecret = []byte(secret)
+}

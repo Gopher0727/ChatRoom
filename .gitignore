@@ -1,4 +1,16 @@
 .vscode/
 
+tmp/
 build/
 docs/
+
+*.bin
+
+.air.toml
+
+config.toml
+
+docker-compose.yml
+
+README.md
+
