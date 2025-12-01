@@ -6,18 +6,27 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
+	"github.com/Gopher0727/ChatRoom/internal/configs"
 	"github.com/Gopher0727/ChatRoom/internal/handlers"
 	"github.com/Gopher0727/ChatRoom/internal/middlewares"
 )
 
 // SetupRoutes 设置所有路由
-func SetupRoutes(r *gin.Engine,
+func SetupRoutes(r *gin.Engine, cfg *configs.Config,
 	userHandler *handlers.UserHandler,
 	guildHandler *handlers.GuildHandler,
 ) {
-	// 应用全局中间件
 	r.Use(cors.Default())
 
+	// 全局限流中间件 (防止 QPS 过高)
+	// 使用配置中的参数，并设置等待超时时间
+	// r.Use(middlewares.RateLimitMiddleware(2 * time.Second))
+
+	// 异步处理中间件
+	// 将请求放入 Worker Pool 中排队执行
+	r.Use(middlewares.AsyncMiddleware())
+
+	// 注册路由
 	RegisterUserRoutes(r, userHandler)
 	RegisterGuildRoutes(r, guildHandler)
 
@@ -105,21 +114,6 @@ func RegisterRoleRoutes(r *gin.Engine) {
         // 给成员分配角色
         roleGroup.PUT("/:role_id/members/:user_id", AddRoleToMember)
         roleGroup.DELETE("/:role_id/members/:user_id", RemoveRoleFromMember)
-    }
-}
-
-
-// MessageHandler 接口定义
-func RegisterMessageRoutes(r *gin.Engine) {
-    msgGroup := r.Group("/api/v1/messages")
-    {
-        msgGroup.PATCH("/:message_id", EditMessage)    // 编辑消息 (Discord 允许修改已发内容)
-        msgGroup.DELETE("/:message_id", DeleteMessage) // 撤回/删除消息
-
-        // 表情回应 (Reactions)
-        // PUT /messages/123/reactions/🔥/me
-        msgGroup.PUT("/:message_id/reactions/:emoji", AddReaction)
-        msgGroup.DELETE("/:message_id/reactions/:emoji", RemoveReaction)
     }
 }
 

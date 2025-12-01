@@ -89,6 +89,26 @@ func (tb *TokenBucket) AllowN(n int64) bool {
 	return false
 }
 
+// WaitN 等待 n 个令牌，或者超时
+// TODO
+func (tb *TokenBucket) WaitN(n int64, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+
+	// 简单的轮询等待，实际生产中可以使用条件变量或 channel 优化
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		if tb.AllowN(n) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		<-ticker.C
+	}
+}
+
 // GetStatus 获取当前桶的状态
 func (tb *TokenBucket) GetStatus() (current int64, capacity int64) {
 	tb.mutex.Lock()

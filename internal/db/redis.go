@@ -8,12 +8,14 @@ import (
 	redis "github.com/redis/go-redis/v9"
 )
 
-// InitRedis 初始化Redis连接
-func InitRedis(host, port, password string, db int) (*redis.Client, error) {
+// InitRedis 初始化 Redis 连接
+func InitRedis(host, port, password string, db, poolSize, minIdleConns int) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", host, port),
-		Password: password,
-		DB:       db,
+		Addr:         fmt.Sprintf("%s:%s", host, port),
+		Password:     password,
+		DB:           db,
+		PoolSize:     poolSize,     // 最大连接数
+		MinIdleConns: minIdleConns, // 最小空闲连接数
 	})
 
 	// 测试连接
