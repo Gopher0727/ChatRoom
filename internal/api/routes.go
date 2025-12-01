@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Gopher0727/ChatRoom/internal/handlers"
+	"github.com/Gopher0727/ChatRoom/internal/middlewares"
 )
 
 // SetupRoutes 设置所有路由
@@ -33,9 +34,10 @@ func RegisterUserRoutes(r *gin.Engine, userHandler *handlers.UserHandler) {
 		userGroup.POST("/register", userHandler.Register) // 注册
 		userGroup.POST("/login", userHandler.Login)       // 登录
 	}
-	// r.Use(middlewares.AuthMiddleware())
+	userGroup.Use(middlewares.AuthMiddleware())
 	{
 		userGroup.POST("/logout", userHandler.Logout) // 登出
+		userGroup.POST("/cancel", userHandler.Cancel) // 注销
 
 		// 用户个人信息
 		userGroup.GET("/me", userHandler.GetProfile)                // 获取当前用户信息

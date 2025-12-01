@@ -20,11 +20,6 @@ type User struct {
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relations
-	// OwnedGroups  []Group       `gorm:"foreignKey:OwnerID" json:"-"`
-	// GroupMembers []GroupMember `gorm:"foreignKey:UserID" json:"-"`
-	// Messages     []Message     `gorm:"foreignKey:SenderID" json:"-"`
 }
 
 func (User) TableName() string {

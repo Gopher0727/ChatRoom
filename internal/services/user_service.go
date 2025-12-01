@@ -31,17 +31,43 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// LogoutRequest 登出请求
+type LogoutRequest struct {
+	UserName string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+// CancelRequest 注销请求
+type CancelRequest struct {
+	UserName string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 // RegisterResponse 注册响应
 type RegisterResponse struct {
 	UserID   uint   `json:"user_id"`
 	UserName string `json:"username"`
 	Email    string `json:"email"`
+	Status   string `json:"status"`
 }
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	Token    string `json:"token"`
 	UserID   uint   `json:"user_id"`
+	UserName string `json:"username"`
+	Email    string `json:"email"`
+	Status   string `json:"status"`
+	Token    string `json:"token"`
+}
+
+// LogoutResponse 登出响应
+type LogoutResponse struct {
+	UserName string `json:"username"`
+	Status   string `json:"status"`
+}
+
+// CancelResponse 注销响应
+type CancelResponse struct {
 	UserName string `json:"username"`
 	Email    string `json:"email"`
 }
@@ -93,6 +119,7 @@ func (s *UserService) Register(req *RegisterRequest) (*RegisterResponse, error) 
 		UserID:   user.ID,
 		UserName: user.UserName,
 		Email:    user.Email,
+		Status:   "offline",
 	}, nil
 }
 
@@ -110,16 +137,73 @@ func (s *UserService) Login(req *LoginRequest) (*LoginResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	if user.Status == "online" {
+		return &LoginResponse{
+			Token: token,
+		}, errors.New("用户已登录")
+	}
+
+	s.UserRepo.UpdateStatus(user.ID, "online")
 
 	return &LoginResponse{
 		Token:    token,
 		UserID:   user.ID,
 		UserName: user.UserName,
 		Email:    user.Email,
+		Status:   "online",
+	}, nil
+}
+
+func (s *UserService) Logout(req *LogoutRequest) (*LogoutResponse, error) {
+	user, err := s.UserRepo.GetByUserName(req.UserName)
+	if err != nil {
+		return nil, errors.New("invalid username or password")
+	}
+	if user.Status == "offline" {
+		return nil, errors.New("用户已退出")
+	}
+
+	if !utils.CheckPassword(user.PasswordHash, req.Password) {
+		return nil, errors.New("invalid username or password")
+	}
+
+	s.UserRepo.UpdateStatus(user.ID, "offline")
+
+	return &LogoutResponse{
+		UserName: user.UserName,
+		Status:   "offline",
+	}, nil
+}
+
+func (s *UserService) Cancel(req *CancelRequest) (*CancelResponse, error) {
+	user, err := s.UserRepo.GetByUserName(req.UserName)
+	if err != nil {
+		return nil, errors.New("invalid username or password")
+	}
+	if user.Status != "online" {
+		return nil, errors.New("请在登陆状态进行注销")
+	}
+
+	if !utils.CheckPassword(user.PasswordHash, req.Password) {
+		return nil, errors.New("invalid username or password")
+	}
+
+	s.UserRepo.Delete(user.ID)
+
+	return &CancelResponse{
+		UserName: user.UserName,
+		Email:    user.Email,
 	}, nil
 }
 
 func (s *UserService) GetProfile(userID uint) (*models.User, error) {
+	user, err := s.UserRepo.GetByID(userID)
+	if err != nil {
+		return nil, errors.New("invalid userID")
+	}
+	if user.Status != "online" {
+		return nil, errors.New("请在登陆状态获取个人信息")
+	}
 	return s.UserRepo.GetByID(userID)
 }
 
@@ -127,6 +211,9 @@ func (s *UserService) UpdateProfile(userID uint, nickname, avatarURL string) err
 	user, err := s.UserRepo.GetByID(userID)
 	if err != nil {
 		return err
+	}
+	if user.Status != "online" {
+		return errors.New("请在登陆状态获取个人信息")
 	}
 
 	if nickname != "" {

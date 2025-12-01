@@ -48,7 +48,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 将 claims 存储在 context 中
-		c.Set("userID", claims.UserID)
+		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.UserName)
 		c.Set("email", claims.Email)
 
