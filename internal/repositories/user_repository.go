@@ -21,7 +21,7 @@ func (r *UserRepository) Create(user *models.User) error {
 	return r.db.Create(user).Error
 }
 
-// GetByID 根据ID获取用户
+// GetByID 根据 ID 获取用户
 func (r *UserRepository) GetByID(id uint) (*models.User, error) {
 	var user models.User
 	if err := r.db.First(&user, id).Error; err != nil {
@@ -30,8 +30,8 @@ func (r *UserRepository) GetByID(id uint) (*models.User, error) {
 	return &user, nil
 }
 
-// GetByUsername 根据用户名获取用户
-func (r *UserRepository) GetByUsername(username string) (*models.User, error) {
+// GetByUserName 根据用户名获取用户
+func (r *UserRepository) GetByUserName(username string) (*models.User, error) {
 	var user models.User
 	if err := r.db.Where("username = ?", username).First(&user).Error; err != nil {
 		return nil, err
@@ -46,6 +46,20 @@ func (r *UserRepository) GetByEmail(email string) (*models.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// ExistsByUserName 检查用户名是否存在
+func (r *UserRepository) ExistsByUserName(username string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.User{}).Where("username = ?", username).Count(&count).Error
+	return count > 0, err
+}
+
+// ExistsByEmail 检查邮箱是否存在
+func (r *UserRepository) ExistsByEmail(email string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.User{}).Where("email = ?", email).Count(&count).Error
+	return count > 0, err
 }
 
 // Update 更新用户

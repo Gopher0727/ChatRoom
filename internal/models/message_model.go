@@ -17,8 +17,8 @@ type Message struct {
 	CreatedAt  time.Time      `json:"created_at"`
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Group  *Group `gorm:"foreignKey:GroupID" json:"-"`
-	Sender *User  `gorm:"foreignKey:SenderID" json:"-"`
+	// Group  *Group `gorm:"foreignKey:GroupID" json:"-"`
+	Sender *User `gorm:"foreignKey:SenderID" json:"-"`
 }
 
 func (Message) TableName() string {

@@ -16,7 +16,7 @@ var (
 // Claims JWT 声明
 type Claims struct {
 	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
+	UserName string `json:"username"`
 	Email    string `json:"email"`
 	jwt.RegisteredClaims
 }
@@ -25,7 +25,7 @@ type Claims struct {
 func GenerateToken(userID uint, username string, email string) (string, error) {
 	claims := &Claims{
 		UserID:   userID,
-		Username: username,
+		UserName: username,
 		Email:    email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
@@ -37,7 +37,7 @@ func GenerateToken(userID uint, username string, email string) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
-// ParseToken 解析JWT token
+// ParseToken 解析 JWT token
 func ParseToken(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/Gopher0727/ChatRoom/pkg/utils"
+	"github.com/Gopher0727/ChatRoom/internal/utils"
 )
 
 // AuthMiddleware JWT 认证中间件
@@ -49,25 +49,8 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// 将 claims 存储在 context 中
 		c.Set("userID", claims.UserID)
-		c.Set("username", claims.Username)
+		c.Set("username", claims.UserName)
 		c.Set("email", claims.Email)
-
-		c.Next()
-	}
-}
-
-// CORSMiddleware CORS 中间件
-func CORSMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
 
 		c.Next()
 	}

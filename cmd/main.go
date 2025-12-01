@@ -18,42 +18,40 @@ func main() {
 	cfg, err := configs.LoadConfig("./config.toml")
 	// fmt.Printf("%+v\n", cfg)
 	if err != nil {
-		log.Fatalf("init config failed: %v", err)
+		log.Fatalf("Init config failed: %v", err)
 	}
 
 	// 初始化 PostgreSQL
 	dsn := db.BuildDSN(cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.DBName)
-	database, err := db.InitPostgres(dsn)
+	postgres, err := db.InitPostgres(dsn)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
 	// 初始化 Redis
-	redisClient, err := db.InitRedis(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB)
-	if err != nil {
-		log.Fatalf("Failed to initialize redis: %v", err)
-	}
+	// redisClient, err := db.InitRedis(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB)
+	// if err != nil {
+	// 	log.Fatalf("Failed to initialize redis: %v", err)
+	// }
 
 	// 初始化仓储层
-	userRepo := repositories.NewUserRepository(database)
-	groupRepo := repositories.NewGroupRepository(database)
-	messageRepo := repositories.NewMessageRepository(database)
+	userRepo := repositories.NewUserRepository(postgres)
 
 	// 初始化服务层
-	authService := services.NewAuthService(userRepo)
-	groupService := services.NewGroupService(groupRepo, messageRepo)
-	messageService := services.NewMessageService(messageRepo, groupRepo, redisClient)
+	userService := services.NewUserService(userRepo)
 
 	// 初始化处理器
-	authHandler := handlers.NewAuthHandler(authService)
-	groupHandler := handlers.NewGroupHandler(groupService)
-	messageHandler := handlers.NewMessageHandler(messageService)
+	userHandler := handlers.NewUserHandler(userService)
 
-	// 创建Gin引擎
+	// 配置并创建 Gin 引擎
+	gin.SetMode(cfg.Server.Mode)
+
 	r := gin.Default()
 
 	// 设置路由
-	api.SetupRoutes(r, authHandler, groupHandler, messageHandler)
+	api.SetupRoutes(r,
+		userHandler,
+	)
 
 	// 启动服务器
 	log.Printf("Starting server on :%d\n", cfg.Server.Port)

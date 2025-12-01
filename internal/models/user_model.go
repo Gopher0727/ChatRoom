@@ -10,7 +10,7 @@ import (
 type User struct {
 	ID uint `gorm:"primaryKey" json:"id"`
 
-	Username     string `gorm:"uniqueIndex;not null" json:"username"`
+	UserName     string `gorm:"column:username;uniqueIndex;not null" json:"username"`
 	Email        string `gorm:"uniqueIndex;not null" json:"email"`
 	PasswordHash string `gorm:"not null" json:"-"`
 	Nickname     string `json:"nickname"`
@@ -22,9 +22,9 @@ type User struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relations
-	OwnedGroups  []Group       `gorm:"foreignKey:OwnerID" json:"-"`
-	GroupMembers []GroupMember `gorm:"foreignKey:UserID" json:"-"`
-	Messages     []Message     `gorm:"foreignKey:SenderID" json:"-"`
+	// OwnedGroups  []Group       `gorm:"foreignKey:OwnerID" json:"-"`
+	// GroupMembers []GroupMember `gorm:"foreignKey:UserID" json:"-"`
+	// Messages     []Message     `gorm:"foreignKey:SenderID" json:"-"`
 }
 
 func (User) TableName() string {

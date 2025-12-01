@@ -11,7 +11,7 @@ import (
 	"github.com/Gopher0727/ChatRoom/internal/models"
 )
 
-// InitPostgres 初始化PostgreSQL连接
+// InitPostgres 初始化 PostgreSQL 连接
 func InitPostgres(dsn string) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
@@ -24,9 +24,9 @@ func InitPostgres(dsn string) (*gorm.DB, error) {
 	// 自动迁移
 	err = db.AutoMigrate(
 		&models.User{},
-		&models.Group{},
-		&models.GroupMember{},
-		&models.Message{},
+		// &models.Group{},
+		// &models.GroupMember{},
+		// &models.Message{},
 	)
 	if err != nil {
 		log.Printf("Failed to migrate models: %v", err)
