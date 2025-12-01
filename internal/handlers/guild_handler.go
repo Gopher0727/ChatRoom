@@ -23,8 +23,7 @@ func NewGuildHandler(guildService *services.GuildService, hub *ws.Hub) *GuildHan
 	}
 }
 
-// CreateGuild 处理创建 Guild 的请求
-// 实现逻辑：从 Context 获取当前登录用户 ID，解析请求体中的 Topic，调用 Service 创建 Guild
+// CreateGuild 从 Context 获取当前登录用户 ID，解析请求体中的 Topic，创建 Guild
 func (h *GuildHandler) CreateGuild(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -47,8 +46,7 @@ func (h *GuildHandler) CreateGuild(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// CreateInvite 处理创建邀请码的请求
-// 实现逻辑：解析 URL 参数中的 guild_id，调用 Service 为该 Guild 生成邀请码
+// CreateInvite 解析 URL 参数中的 guild_id，为该 Guild 生成邀请码
 func (h *GuildHandler) CreateInvite(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -76,8 +74,7 @@ func (h *GuildHandler) CreateInvite(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// JoinGuild 处理加入 Guild 的请求
-// 实现逻辑：解析请求体中的邀请码，调用 Service 验证邀请码并添加成员
+// JoinGuild 解析请求体中的邀请码，验证邀请码并添加成员
 func (h *GuildHandler) JoinGuild(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -108,8 +105,7 @@ func (h *GuildHandler) JoinGuild(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "成功加入服务器"})
 }
 
-// SendMessage 处理发送消息的请求
-// 实现逻辑：解析 URL 参数 guild_id 和请求体内容，调用 Service 发送消息
+// SendMessage 解析 URL 参数 guild_id 和请求体内容，发送消息
 func (h *GuildHandler) SendMessage(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -141,13 +137,13 @@ func (h *GuildHandler) SendMessage(c *gin.Context) {
 	}
 
 	// 广播消息给 WebSocket 客户端
+	// TODO
 	h.Hub.BroadcastToGuild(uint(guildID), resp)
 
 	c.JSON(http.StatusCreated, resp)
 }
 
-// GetMessages 处理获取消息列表的请求
-// 实现逻辑：解析 URL 参数 guild_id 和分页参数 limit/offset，调用 Service 获取消息
+// GetMessages 解析 URL 参数 guild_id 和分页参数 limit/offset，获取消息列表
 func (h *GuildHandler) GetMessages(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -163,9 +159,32 @@ func (h *GuildHandler) GetMessages(c *gin.Context) {
 	}
 
 	limitStr := c.DefaultQuery("limit", "50")
-	offsetStr := c.DefaultQuery("offset", "0")
-
 	limit, _ := strconv.Atoi(limitStr)
+
+	// 检查是否有 after_seq 参数 (增量同步)
+	afterSeqStr := c.Query("after_seq")
+	if afterSeqStr != "" {
+		afterSeq, err := strconv.ParseInt(afterSeqStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 sequence_id"})
+			return
+		}
+
+		resp, err := h.GuildService.GetMessagesAfterSequence(userID.(uint), uint(guildID), afterSeq, limit)
+		if err != nil {
+			if errors.Is(err, services.ErrUserNotMember) {
+				c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+
+	// 原有的分页逻辑 (全量/历史同步)
+	offsetStr := c.DefaultQuery("offset", "0")
 	offset, _ := strconv.Atoi(offsetStr)
 
 	resp, err := h.GuildService.GetMessages(userID.(uint), uint(guildID), limit, offset)

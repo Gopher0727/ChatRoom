@@ -28,7 +28,6 @@ func (h *UserHandler) Register(c *gin.Context) {
 
 	resp, err := h.UserService.Register(&req)
 	if err != nil {
-		// 根据错误类型返回不同的状态码
 		if errors.Is(err, services.ErrUserAlreadyExists) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		} else {
@@ -49,7 +48,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	resp, err := h.UserService.Login(&req)
 	if err != nil {
-		// 特殊处理：如果用户已登录，Service 层会返回 token 和 ErrUserAlreadyLogin
+		// 如果用户已登录，Service 层会返回 token 和 ErrUserAlreadyLogin
 		if errors.Is(err, services.ErrUserAlreadyLogin) {
 			c.JSON(http.StatusOK, gin.H{
 				"message": err.Error(),

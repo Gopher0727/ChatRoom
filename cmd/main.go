@@ -21,7 +21,7 @@ func main() {
 	cfg, err := configs.LoadConfig("./config.toml")
 	// fmt.Printf("%+v\n", cfg)
 	if err != nil {
-		log.Fatalf("Init config failed: %v", err)
+		log.Fatalf("配置初始化失败: %v", err)
 	}
 
 	// 初始化全局限流器
@@ -35,25 +35,25 @@ func main() {
 	dsn := db.BuildDSN(cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.DBName)
 	postgres, err := db.InitPostgres(dsn, cfg.Postgres.MaxIdleConns, cfg.Postgres.MaxOpenConns)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Fatalf("postgres 初始化失败: %v", err)
 	}
 
 	// 初始化 Redis
-	// redisClient, err := db.InitRedis(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB, cfg.Redis.PoolSize, cfg.Redis.MinIdleConns)
-	// if err != nil {
-	// 	log.Fatalf("Failed to initialize redis: %v", err)
-	// }
+	redisClient, err := db.InitRedis(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB, cfg.Redis.PoolSize, cfg.Redis.MinIdleConns)
+	if err != nil {
+		log.Fatalf("redis 初始化失败: %v", err)
+	}
 
 	// 初始化仓储层
-	userRepo := repositories.NewUserRepository(postgres)
-	guildRepo := repositories.NewGuildRepository(postgres)
+	userRepo := repositories.NewUserRepository(postgres, redisClient)
+	guildRepo := repositories.NewGuildRepository(postgres, redisClient)
 
 	// 初始化服务层
 	userService := services.NewUserService(userRepo)
-	guildService := services.NewGuildService(guildRepo)
+	guildService := services.NewGuildService(guildRepo, userRepo)
 
 	// 初始化 WebSocket Hub
-	hub := ws.NewHub()
+	hub := ws.NewHub(guildRepo, redisClient)
 	go hub.Run()
 
 	// 初始化处理器

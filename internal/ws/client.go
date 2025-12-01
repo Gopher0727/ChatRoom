@@ -29,7 +29,6 @@ const (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// 允许跨域
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
@@ -64,7 +63,18 @@ func (c *Client) readPump() {
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		// 收到 Pong，说明客户端还活着，刷新在线状态
+		// 异步执行，避免阻塞
+		go c.guildService.RefreshUserOnlineStatus(c.userID, c.guildIDs)
+		return nil
+	})
+
+	// 拉取离线消息
+	// 异步执行，防止阻塞 readPump 导致心跳超时
+	go c.syncOfflineMessages()
+
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
@@ -99,10 +109,37 @@ func (c *Client) readPump() {
 		}
 
 		// 构造完整的消息模型用于广播
-		// 广播消息
 		c.hub.BroadcastToGuild(req.GuildID, resp)
 
 		log.Printf("User %d sent message to guild %d: %s", c.userID, req.GuildID, resp.Content)
+	}
+}
+
+// syncOfflineMessages 拉取并发送离线消息
+func (c *Client) syncOfflineMessages() {
+	// 防止向已关闭的 channel 发送导致 panic
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Recovered from panic in syncOfflineMessages: %v", r)
+		}
+	}()
+
+	messages, err := c.guildService.GetOfflineMessages(c.userID)
+	if err != nil {
+		log.Printf("Error getting offline messages for user %d: %v", c.userID, err)
+		return
+	}
+
+	for _, msg := range messages {
+		// 包装成 BroadcastMessage 发送到客户端
+		broadcastMsg := &BroadcastMessage{
+			GuildID: msg.GuildID,
+			Message: msg, // Service 返回的是 MessageResponse
+		}
+
+		// 阻塞发送，确保消息不丢失（除非连接断开）
+		// 因为是在独立的 goroutine 中，不会阻塞心跳检测
+		c.send <- broadcastMsg
 	}
 }
 
@@ -113,6 +150,7 @@ func (c *Client) writePump() {
 		ticker.Stop()
 		c.conn.Close()
 	}()
+
 	for {
 		select {
 		case msg, ok := <-c.send:
@@ -135,7 +173,7 @@ func (c *Client) writePump() {
 
 			// 添加队列中的其他消息（如果有）
 			n := len(c.send)
-			for i := 0; i < n; i++ {
+			for range n {
 				json.NewEncoder(w).Encode(<-c.send)
 			}
 
@@ -152,8 +190,8 @@ func (c *Client) writePump() {
 }
 
 // ServeWs 处理 WebSocket 请求
+// TODO
 func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
-	// 1. 获取用户 ID (假设已通过 Auth 中间件)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		// 如果是 WebSocket 连接请求，可能无法直接通过 Header 传递 Token
@@ -164,14 +202,14 @@ func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 		return
 	}
 
-	// 2. 升级连接
+	// 升级连接
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade websocket: %v", err)
 		return
 	}
 
-	// 3. 获取用户加入的 Guild 列表
+	// 获取用户加入的 Guild 列表
 	uID := userID.(uint)
 	guildIDs, err := guildService.GetUserGuildIDs(uID)
 	if err != nil {
@@ -180,7 +218,7 @@ func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 		return
 	}
 
-	// 4. 创建 Client 实例
+	// 创建 Client 实例
 	client := &Client{
 		hub:          hub,
 		conn:         conn,
@@ -190,10 +228,10 @@ func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 		guildService: guildService,
 	}
 
-	// 5. 注册到 Hub
+	// 注册到 Hub
 	client.hub.register <- client
 
-	// 6. 启动读写协程
+	// 启动读写协程
 	go client.writePump()
 	go client.readPump()
 }
