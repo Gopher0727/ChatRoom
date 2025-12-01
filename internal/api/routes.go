@@ -13,11 +13,13 @@ import (
 // SetupRoutes 设置所有路由
 func SetupRoutes(r *gin.Engine,
 	userHandler *handlers.UserHandler,
+	guildHandler *handlers.GuildHandler,
 ) {
 	// 应用全局中间件
 	r.Use(cors.Default())
 
 	RegisterUserRoutes(r, userHandler)
+	RegisterGuildRoutes(r, guildHandler)
 
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
@@ -46,29 +48,26 @@ func RegisterUserRoutes(r *gin.Engine, userHandler *handlers.UserHandler) {
 	}
 }
 
-/*
-
 // GuildHandler 接口定义
-func RegisterGuildRoutes(r *gin.Engine) {
-    guildGroup := r.Group("/api/v1/guilds")
-    {
-        guildGroup.POST("", CreateGuild)                // 创建服务器
-        guildGroup.GET("/:guild_id", GetGuildInfo)      // 获取服务器详情（含频道列表、角色列表）
-        guildGroup.PUT("/:guild_id", UpdateGuild)       // 修改服务器信息（图标、名称）
-        guildGroup.DELETE("/:guild_id", DeleteGuild)    // 删除/解散服务器
+func RegisterGuildRoutes(r *gin.Engine, guildHandler *handlers.GuildHandler) {
+	guildGroup := r.Group("/api/v1/guilds")
+	guildGroup.Use(middlewares.AuthMiddleware())
+	{
+		guildGroup.POST("", guildHandler.CreateGuild) // 创建服务器
 
-        // 成员管理
-        guildGroup.POST("/:guild_id/join", JoinGuild)         // 加入服务器 (通过邀请码)
-        guildGroup.DELETE("/:guild_id/leave", LeaveGuild)     // 退出服务器
-        guildGroup.DELETE("/:guild_id/members/:user_id", KickMember) // 踢人
-        guildGroup.PUT("/:guild_id/members/:user_id/ban", BanMember) // 封禁
+		// 成员管理
+		guildGroup.POST("/join", guildHandler.JoinGuild) // 加入服务器 (通过邀请码)
 
-        // 邀请码
-        guildGroup.POST("/:guild_id/invites", CreateInvite)   // 生成邀请链接
-        guildGroup.GET("/:guild_id/invites", GetInvites)      // 获取活跃邀请列表
-    }
+		// 邀请码
+		guildGroup.POST("/:guild_id/invites", guildHandler.CreateInvite) // 生成邀请链接
+
+		// 消息相关
+		guildGroup.POST("/:guild_id/messages", guildHandler.SendMessage) // 发送消息
+		guildGroup.GET("/:guild_id/messages", guildHandler.GetMessages)  // 获取消息列表
+	}
 }
 
+/*
 
 // ChannelHandler 接口定义
 func RegisterChannelRoutes(r *gin.Engine) {

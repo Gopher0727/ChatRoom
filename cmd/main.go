@@ -36,12 +36,15 @@ func main() {
 
 	// 初始化仓储层
 	userRepo := repositories.NewUserRepository(postgres)
+	guildRepo := repositories.NewGuildRepository(postgres)
 
 	// 初始化服务层
 	userService := services.NewUserService(userRepo)
+	guildService := services.NewGuildService(guildRepo)
 
 	// 初始化处理器
 	userHandler := handlers.NewUserHandler(userService)
+	guildHandler := handlers.NewGuildHandler(guildService)
 
 	// 配置并创建 Gin 引擎
 	gin.SetMode(cfg.Server.Mode)
@@ -51,6 +54,7 @@ func main() {
 	// 设置路由
 	api.SetupRoutes(r,
 		userHandler,
+		guildHandler,
 	)
 
 	// 启动服务器

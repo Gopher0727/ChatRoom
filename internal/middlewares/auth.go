@@ -17,7 +17,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		if authHeader == "" {
 			c.JSON(
 				http.StatusUnauthorized,
-				"missing authorization header",
+				gin.H{"error": "请求头中缺少 Authorization 信息"},
 			)
 			c.Abort()
 			return
@@ -28,7 +28,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			c.JSON(
 				http.StatusUnauthorized,
-				"invalid authorization header format",
+				gin.H{"error": "Authorization 格式错误，应为 Bearer <token>"},
 			)
 			c.Abort()
 			return
@@ -41,7 +41,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		if err != nil {
 			c.JSON(
 				http.StatusUnauthorized,
-				"invalid or expired token",
+				gin.H{"error": "Token 无效或已过期"},
 			)
 			c.Abort()
 			return

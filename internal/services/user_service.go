@@ -8,6 +8,16 @@ import (
 	"github.com/Gopher0727/ChatRoom/internal/utils"
 )
 
+// 定义业务错误，供 Handler 层判断状态码
+var (
+	ErrUserNotFound      = errors.New("用户不存在")
+	ErrUserAlreadyExists = errors.New("用户已存在")
+	ErrPasswordIncorrect = errors.New("密码错误")
+	ErrInvalidParams     = errors.New("参数无效")
+	ErrUserNotLogin      = errors.New("用户未登录")
+	ErrUserAlreadyLogin  = errors.New("用户已登录")
+)
+
 type UserService struct {
 	UserRepo *repositories.UserRepository
 }
@@ -74,13 +84,13 @@ type CancelResponse struct {
 
 func (s *UserService) Register(req *RegisterRequest) (*RegisterResponse, error) {
 	if !utils.ValidateUserName(req.UserName) {
-		return nil, errors.New("invalid username format")
+		return nil, errors.New("用户名格式无效")
 	}
 	if !utils.ValidateEmail(req.Email) {
-		return nil, errors.New("invalid email format")
+		return nil, errors.New("邮箱格式无效")
 	}
 	if !utils.ValidatePassword(req.Password) {
-		return nil, errors.New("password must be at least 8 characters")
+		return nil, errors.New("密码长度至少为8位")
 	}
 
 	existsUserName, err := s.UserRepo.ExistsByUserName(req.UserName)
@@ -88,7 +98,7 @@ func (s *UserService) Register(req *RegisterRequest) (*RegisterResponse, error) 
 		return nil, err
 	}
 	if existsUserName {
-		return nil, errors.New("username already exists")
+		return nil, errors.New("用户名已存在")
 	}
 
 	existsEmail, err := s.UserRepo.ExistsByEmail(req.Email)
@@ -96,7 +106,7 @@ func (s *UserService) Register(req *RegisterRequest) (*RegisterResponse, error) 
 		return nil, err
 	}
 	if existsEmail {
-		return nil, errors.New("email already exists")
+		return nil, errors.New("邮箱已存在")
 	}
 
 	passwordHash, err := utils.HashPassword(req.Password)
@@ -126,21 +136,26 @@ func (s *UserService) Register(req *RegisterRequest) (*RegisterResponse, error) 
 func (s *UserService) Login(req *LoginRequest) (*LoginResponse, error) {
 	user, err := s.UserRepo.GetByUserName(req.UserName)
 	if err != nil {
-		return nil, errors.New("invalid username or password")
+		// 为了安全，不透露是用户名不存在还是密码错误，但在 Service 层可以区分
+		// Handler 层统一处理
+		return nil, ErrUserNotFound
 	}
 
 	if !utils.CheckPassword(user.PasswordHash, req.Password) {
-		return nil, errors.New("invalid username or password")
+		return nil, ErrPasswordIncorrect
 	}
 
 	token, err := utils.GenerateToken(user.ID, user.UserName, user.Email)
 	if err != nil {
 		return nil, err
 	}
+
+	// 如果用户已经是在线状态，依然返回成功，但可以提示
 	if user.Status == "online" {
+		// 这里视业务需求而定，通常重复登录是允许的，或者踢掉旧连接
 		return &LoginResponse{
 			Token: token,
-		}, errors.New("用户已登录")
+		}, ErrUserAlreadyLogin
 	}
 
 	s.UserRepo.UpdateStatus(user.ID, "online")
@@ -157,14 +172,14 @@ func (s *UserService) Login(req *LoginRequest) (*LoginResponse, error) {
 func (s *UserService) Logout(req *LogoutRequest) (*LogoutResponse, error) {
 	user, err := s.UserRepo.GetByUserName(req.UserName)
 	if err != nil {
-		return nil, errors.New("invalid username or password")
+		return nil, ErrUserNotFound
 	}
 	if user.Status == "offline" {
-		return nil, errors.New("用户已退出")
+		return nil, ErrUserNotLogin
 	}
 
 	if !utils.CheckPassword(user.PasswordHash, req.Password) {
-		return nil, errors.New("invalid username or password")
+		return nil, ErrPasswordIncorrect
 	}
 
 	s.UserRepo.UpdateStatus(user.ID, "offline")
@@ -178,14 +193,11 @@ func (s *UserService) Logout(req *LogoutRequest) (*LogoutResponse, error) {
 func (s *UserService) Cancel(req *CancelRequest) (*CancelResponse, error) {
 	user, err := s.UserRepo.GetByUserName(req.UserName)
 	if err != nil {
-		return nil, errors.New("invalid username or password")
-	}
-	if user.Status != "online" {
-		return nil, errors.New("请在登陆状态进行注销")
+		return nil, ErrUserNotFound
 	}
 
 	if !utils.CheckPassword(user.PasswordHash, req.Password) {
-		return nil, errors.New("invalid username or password")
+		return nil, ErrPasswordIncorrect
 	}
 
 	s.UserRepo.Delete(user.ID)
@@ -199,21 +211,21 @@ func (s *UserService) Cancel(req *CancelRequest) (*CancelResponse, error) {
 func (s *UserService) GetProfile(userID uint) (*models.User, error) {
 	user, err := s.UserRepo.GetByID(userID)
 	if err != nil {
-		return nil, errors.New("invalid userID")
+		return nil, ErrUserNotFound
 	}
 	if user.Status != "online" {
-		return nil, errors.New("请在登陆状态获取个人信息")
+		return nil, ErrUserNotLogin
 	}
-	return s.UserRepo.GetByID(userID)
+	return user, nil
 }
 
 func (s *UserService) UpdateProfile(userID uint, nickname, avatarURL string) error {
 	user, err := s.UserRepo.GetByID(userID)
 	if err != nil {
-		return err
+		return ErrUserNotFound
 	}
 	if user.Status != "online" {
-		return errors.New("请在登陆状态获取个人信息")
+		return ErrUserNotLogin
 	}
 
 	if nickname != "" {
@@ -228,16 +240,16 @@ func (s *UserService) UpdateProfile(userID uint, nickname, avatarURL string) err
 
 func (s *UserService) ChangePassword(userID uint, oldPassword, newPassword string) error {
 	if !utils.ValidatePassword(newPassword) {
-		return errors.New("invalid password")
+		return errors.New("新密码格式无效")
 	}
 
 	user, err := s.UserRepo.GetByID(userID)
 	if err != nil {
-		return err
+		return ErrUserNotFound
 	}
 
 	if !utils.CheckPassword(user.PasswordHash, oldPassword) {
-		return errors.New("old password is incorrect")
+		return errors.New("旧密码错误")
 	}
 
 	newHash, err := utils.HashPassword(newPassword)

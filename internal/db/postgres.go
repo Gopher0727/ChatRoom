@@ -24,9 +24,9 @@ func InitPostgres(dsn string) (*gorm.DB, error) {
 	// 自动迁移
 	err = db.AutoMigrate(
 		&models.User{},
-		// &models.Group{},
-		// &models.GroupMember{},
-		// &models.Message{},
+		&models.Guild{},
+		&models.Invite{},
+		&models.Message{},
 	)
 	if err != nil {
 		log.Printf("Failed to migrate models: %v", err)
