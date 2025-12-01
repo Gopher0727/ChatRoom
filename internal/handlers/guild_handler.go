@@ -8,14 +8,19 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Gopher0727/ChatRoom/internal/services"
+	"github.com/Gopher0727/ChatRoom/internal/ws"
 )
 
 type GuildHandler struct {
 	GuildService *services.GuildService
+	Hub          *ws.Hub
 }
 
-func NewGuildHandler(guildService *services.GuildService) *GuildHandler {
-	return &GuildHandler{GuildService: guildService}
+func NewGuildHandler(guildService *services.GuildService, hub *ws.Hub) *GuildHandler {
+	return &GuildHandler{
+		GuildService: guildService,
+		Hub:          hub,
+	}
 }
 
 // CreateGuild 处理创建 Guild 的请求
@@ -134,6 +139,9 @@ func (h *GuildHandler) SendMessage(c *gin.Context) {
 		}
 		return
 	}
+
+	// 广播消息给 WebSocket 客户端
+	h.Hub.BroadcastToGuild(uint(guildID), resp)
 
 	c.JSON(http.StatusCreated, resp)
 }

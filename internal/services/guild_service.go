@@ -205,3 +205,8 @@ func (s *GuildService) GetMessages(userID, guildID uint, limit, offset int) ([]M
 	}
 	return resp, nil
 }
+
+// GetUserGuildIDs 获取用户加入的所有 Guild ID
+func (s *GuildService) GetUserGuildIDs(userID uint) ([]uint, error) {
+	return s.GuildRepo.GetUserGuildIDs(userID)
+}

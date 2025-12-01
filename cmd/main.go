@@ -14,6 +14,7 @@ import (
 	"github.com/Gopher0727/ChatRoom/internal/repositories"
 	"github.com/Gopher0727/ChatRoom/internal/services"
 	"github.com/Gopher0727/ChatRoom/internal/utils"
+	"github.com/Gopher0727/ChatRoom/internal/ws"
 )
 
 func main() {
@@ -51,9 +52,13 @@ func main() {
 	userService := services.NewUserService(userRepo)
 	guildService := services.NewGuildService(guildRepo)
 
+	// 初始化 WebSocket Hub
+	hub := ws.NewHub()
+	go hub.Run()
+
 	// 初始化处理器
 	userHandler := handlers.NewUserHandler(userService)
-	guildHandler := handlers.NewGuildHandler(guildService)
+	guildHandler := handlers.NewGuildHandler(guildService, hub)
 
 	// 配置并创建 Gin 引擎
 	gin.SetMode(cfg.Server.Mode)
@@ -65,6 +70,8 @@ func main() {
 		cfg, // 传入配置对象，用于中间件设置
 		userHandler,
 		guildHandler,
+		hub,
+		guildService,
 	)
 
 	// 启动服务器

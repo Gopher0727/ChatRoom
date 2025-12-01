@@ -95,3 +95,13 @@ func (r *GuildRepository) GetGuildMessages(guildID uint, limit, offset int) ([]m
 		Find(&messages).Error
 	return messages, err
 }
+
+// GetUserGuildIDs 获取用户加入的所有 Guild ID
+func (r *GuildRepository) GetUserGuildIDs(userID uint) ([]uint, error) {
+	var guildIDs []uint
+	// 查询 guild_members 表获取用户加入的 guild_id 列表
+	err := r.db.Model(&models.GuildMember{}).
+		Where("user_id = ?", userID).
+		Pluck("guild_id", &guildIDs).Error
+	return guildIDs, err
+}
