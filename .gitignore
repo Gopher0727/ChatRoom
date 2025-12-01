@@ -1,4 +1,4 @@
-.vscode/
+# .vscode/
 
 tmp/
 build/
@@ -6,11 +6,11 @@ docs/
 
 *.bin
 
-.air.toml
+# .air.toml
 
-config.toml
+# config.toml
 
-docker-compose.yml
+# docker-compose.yml
 
 README.md
 
