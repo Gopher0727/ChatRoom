@@ -1,0 +1,10 @@
+{
+    "gopls": {
+        "ui.navigation.importShortcut": "Definition"
+    },
+    "files.associations": {
+        ".air.toml": "plaintext"
+    },
+    "files.autoSave": "onFocusChange",
+    "go.testTimeout": "60s",
+}
