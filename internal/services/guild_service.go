@@ -7,7 +7,7 @@ import (
 
 	"github.com/Gopher0727/ChatRoom/internal/models"
 	"github.com/Gopher0727/ChatRoom/internal/repositories"
-	"github.com/Gopher0727/ChatRoom/internal/utils"
+	"github.com/Gopher0727/ChatRoom/pkg/utils"
 )
 
 var (

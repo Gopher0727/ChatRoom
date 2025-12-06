@@ -3,7 +3,7 @@ package middlewares
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/Gopher0727/ChatRoom/internal/utils"
+	"github.com/Gopher0727/ChatRoom/pkg/utils"
 )
 
 // AsyncMiddleware 异步处理中间件

@@ -1,4 +1,4 @@
-package api
+package routers
 
 import (
 	"net/http"
@@ -6,15 +6,15 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	"github.com/Gopher0727/ChatRoom/internal/configs"
+	"github.com/Gopher0727/ChatRoom/config"
 	"github.com/Gopher0727/ChatRoom/internal/handlers"
-	"github.com/Gopher0727/ChatRoom/internal/middlewares"
 	"github.com/Gopher0727/ChatRoom/internal/services"
-	"github.com/Gopher0727/ChatRoom/internal/ws"
+	"github.com/Gopher0727/ChatRoom/pkg/middlewares"
+	"github.com/Gopher0727/ChatRoom/pkg/ws"
 )
 
 // SetupRoutes 设置所有路由
-func SetupRoutes(r *gin.Engine, cfg *configs.Config,
+func SetupRoutes(r *gin.Engine, cfg *config.Config,
 	userHandler *handlers.UserHandler,
 	guildHandler *handlers.GuildHandler,
 	hub *ws.Hub, // 注入 Hub

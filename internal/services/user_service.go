@@ -5,7 +5,7 @@ import (
 
 	"github.com/Gopher0727/ChatRoom/internal/models"
 	"github.com/Gopher0727/ChatRoom/internal/repositories"
-	"github.com/Gopher0727/ChatRoom/internal/utils"
+	"github.com/Gopher0727/ChatRoom/pkg/utils"
 )
 
 // 定义业务错误，供 Handler 层判断状态码

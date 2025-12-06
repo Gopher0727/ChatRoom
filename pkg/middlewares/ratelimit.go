@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/Gopher0727/ChatRoom/internal/utils"
+	"github.com/Gopher0727/ChatRoom/pkg/utils"
 )
 
 var (
