@@ -68,6 +68,7 @@ type LoginResponse struct {
 	Email    string `json:"email"`
 	Status   string `json:"status"`
 	Token    string `json:"token"`
+	Message  string `json:"message,omitempty"`
 }
 
 // LogoutResponse 登出响应
@@ -154,7 +155,12 @@ func (s *UserService) Login(req *LoginRequest) (*LoginResponse, error) {
 	if user.Status == "online" {
 		// 这里视业务需求而定，通常重复登录是允许的，或者踢掉旧连接
 		return &LoginResponse{
-			Token: token,
+			Token:    token,
+			UserID:   user.ID,
+			UserName: user.UserName,
+			Email:    user.Email,
+			Status:   "online",
+			Message:  "用户已登录",
 		}, ErrUserAlreadyLogin
 	}
 

@@ -50,10 +50,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 	if err != nil {
 		// 如果用户已登录，Service 层会返回 token 和 ErrUserAlreadyLogin
 		if errors.Is(err, services.ErrUserAlreadyLogin) {
-			c.JSON(http.StatusOK, gin.H{
-				"message": err.Error(),
-				"data":    resp,
-			})
+			c.JSON(http.StatusOK, resp)
 			return
 		}
 

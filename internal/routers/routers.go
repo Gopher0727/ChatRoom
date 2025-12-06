@@ -26,15 +26,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config,
 	// 使用配置中的参数，并设置等待超时时间
 	// r.Use(middlewares.RateLimitMiddleware(2 * time.Second))
 
-	// 异步处理中间件
-	// 将请求放入 Worker Pool 中排队执行
-	r.Use(middlewares.AsyncMiddleware())
-
-	// 注册路由
-	RegisterUserRoutes(r, userHandler)
-	RegisterGuildRoutes(r, guildHandler)
-
-	// WebSocket 路由
+	// WebSocket 路由 (必须在 AsyncMiddleware 之前注册，避免握手请求被放入 Worker Pool)
 	r.GET("/ws", middlewares.AuthMiddleware(), func(c *gin.Context) {
 		ws.ServeWs(hub, guildService, c)
 	})
@@ -45,6 +37,14 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config,
 			"Status": "OK",
 		})
 	})
+
+	// 异步处理中间件
+	// 将请求放入 Worker Pool 中排队执行
+	r.Use(middlewares.AsyncMiddleware())
+
+	// 注册路由
+	RegisterUserRoutes(r, userHandler)
+	RegisterGuildRoutes(r, guildHandler)
 }
 
 // UserHandler 接口定义
