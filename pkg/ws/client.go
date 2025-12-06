@@ -1,9 +1,11 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -68,6 +70,12 @@ func (c *Client) readPump() {
 		// 收到 Pong，说明客户端还活着，刷新在线状态
 		// 异步执行，避免阻塞
 		go c.guildService.RefreshUserOnlineStatus(c.userID, c.guildIDs)
+		// 续期 Redis 路由键 TTL
+		if c.hub != nil && c.hub.redis != nil {
+			key := "User:Connect:" + strconv.Itoa(int(c.userID))
+			// 重设过期时间
+			_ = c.hub.redis.Expire(context.Background(), key, 5*time.Minute).Err()
+		}
 		return nil
 	})
 
@@ -96,10 +104,16 @@ func (c *Client) readPump() {
 			continue
 		}
 
-		// 调用 Service 保存消息
+		// 调用 Service 保存消息（附带 nodeID，便于下游分桶）
+		// 通过一致性哈希获取节点ID
+		var nodeID string
+		if c.hub != nil && c.hub.hashRing != nil {
+			nodeID = c.hub.hashRing.Get(strconv.Itoa(int(c.userID)))
+		}
 		sendReq := &services.SendMessageRequest{
 			Content: req.Content,
 			MsgType: req.MsgType,
+			NodeID:  nodeID,
 		}
 		resp, err := c.guildService.SendMessage(c.userID, req.GuildID, sendReq)
 		if err != nil {
@@ -190,14 +204,9 @@ func (c *Client) writePump() {
 }
 
 // ServeWs 处理 WebSocket 请求
-// TODO
 func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		// 如果是 WebSocket 连接请求，可能无法直接通过 Header 传递 Token
-		// 通常通过 Query 参数传递 ?token=...
-		// 这里假设 AuthMiddleware 已经处理了 Query Token 的情况
-		// 如果没有，我们需要在这里手动处理
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
@@ -218,7 +227,39 @@ func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 		return
 	}
 
-	// 创建 Client 实例
+	// 一致性哈希选择目标节点
+	targetNode := ""
+	if hub.hashRing != nil {
+		targetNode = hub.hashRing.Get(strconv.Itoa(int(uID)))
+	}
+
+	// 命中当前节点：写入 Redis 路由并注册到本地 Hub
+	if targetNode == hub.nodeID || targetNode == "" {
+		if hub.redis != nil {
+			key := "User:Connect:" + strconv.Itoa(int(uID))
+			// TTL 选择心跳周期的2-3倍，这里暂定 5 分钟，心跳续期在 Pong 处刷新
+			if err := hub.redis.Set(c, key, hub.nodeID, 5*time.Minute).Err(); err != nil {
+				log.Printf("Failed to set user route: %v", err)
+			}
+		}
+		// 创建 Client 并注册
+		client := &Client{
+			hub:          hub,
+			conn:         conn,
+			send:         make(chan *BroadcastMessage, 256),
+			userID:       uID,
+			guildIDs:     guildIDs,
+			guildService: guildService,
+		}
+		client.hub.register <- client
+		go client.writePump()
+		go client.readPump()
+		return
+	}
+
+	// 未命中当前节点：策略1 仍接入本节点（简单版本）
+	// 可选策略2：返回目标节点信息，指导客户端重连
+	log.Printf("User %d mapped to node %s, current node %s", uID, targetNode, hub.nodeID)
 	client := &Client{
 		hub:          hub,
 		conn:         conn,
@@ -227,11 +268,7 @@ func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 		guildIDs:     guildIDs,
 		guildService: guildService,
 	}
-
-	// 注册到 Hub
 	client.hub.register <- client
-
-	// 启动读写协程
 	go client.writePump()
 	go client.readPump()
 }

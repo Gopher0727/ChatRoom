@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/Gopher0727/ChatRoom/internal/services"
 	"github.com/Gopher0727/ChatRoom/pkg/ws"
-	"github.com/gin-gonic/gin"
 )
 
 type GuildHandler struct {

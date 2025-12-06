@@ -3,11 +3,13 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"sync"
 
 	redis "github.com/redis/go-redis/v9"
 
 	"github.com/Gopher0727/ChatRoom/internal/repositories"
+	"github.com/Gopher0727/ChatRoom/pkg/utils"
 )
 
 const (
@@ -42,6 +44,10 @@ type Hub struct {
 
 	// 用户 ID 到客户端的映射，方便查找
 	userClients map[uint]*Client
+
+	// 一致性哈希环与当前节点
+	hashRing *utils.HashRing
+	nodeID   string
 }
 
 // BroadcastMessage 广播消息结构
@@ -50,7 +56,7 @@ type BroadcastMessage struct {
 	Message any  `json:"message"`
 }
 
-func NewHub(guildRepo *repositories.GuildRepository, redisClient *redis.Client) *Hub {
+func NewHub(guildRepo *repositories.GuildRepository, redisClient *redis.Client, ring *utils.HashRing, nodeID string) *Hub {
 	return &Hub{
 		broadcast:   make(chan *BroadcastMessage),
 		register:    make(chan *Client),
@@ -60,7 +66,17 @@ func NewHub(guildRepo *repositories.GuildRepository, redisClient *redis.Client) 
 		userClients: make(map[uint]*Client),
 		guildRepo:   guildRepo,
 		redis:       redisClient,
+		hashRing:    ring,
+		nodeID:      nodeID,
 	}
+}
+
+// 可选：后续外部更新哈希环时使用
+func (h *Hub) SetHashRing(ring *utils.HashRing) {
+	hash := ring
+	h.mu.Lock()
+	h.hashRing = hash
+	h.mu.Unlock()
 }
 
 func (h *Hub) Run() {
@@ -105,6 +121,11 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.Unlock()
+			// 删除 Redis 路由键，避免脏路由
+			if h.redis != nil {
+				key := "User:Connect:" + strconv.Itoa(int(client.userID))
+				_ = h.redis.Del(context.Background(), key).Err()
+			}
 
 		case msg := <-h.broadcast:
 			h.mu.RLock()

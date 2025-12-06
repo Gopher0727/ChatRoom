@@ -13,6 +13,7 @@ type Config struct {
 	JWT        JWTConfig        `mapstructure:"jwt"`
 	RateLimit  RateLimitConfig  `mapstructure:"ratelimit"`
 	WorkerPool WorkerPoolConfig `mapstructure:"worker_pool"`
+	Gateway    GatewayConfig    `mapstructure:"gateway"`
 }
 
 type ServerConfig struct {
@@ -54,7 +55,11 @@ type WorkerPoolConfig struct {
 	QueueSize int `mapstructure:"queue_size"`
 }
 
-// TODO
+type GatewayConfig struct {
+	NodeID string         `mapstructure:"node_id"`
+	Nodes  map[string]int `mapstructure:"nodes"`
+}
+
 func LoadConfig(path string) (*Config, error) {
 	v := viper.New()
 

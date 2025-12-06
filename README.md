@@ -18,7 +18,7 @@
 ### 逻辑层 (Business Service)
 
 - API 网关：处理登录、注册、建群、加群等 HTTP 请求，调用 Service 层复用核心逻辑。
-- Service：封装业务逻辑，和 DB / Redis / ES 交互
+- Service：封装业务逻辑，和 postgresql / Redis 交互
 - 消费者：定序、过滤、存储分发
 
 ### 存储与中间件层 (Storage & Middleware)
@@ -31,8 +31,7 @@
     - Cache: 缓存用户信息和在线状态。
 - PostgreSQL
     - 系统的 Source of Truth (真实数据源)，存储所有持久化数据。
-- Elasticsearch
-    - 专门用于解决“搜索聊天记录”这一高 IO 消耗的需求，避免对主库造成压力。
+    - 搜索聊天记录
 
 ### 消息路由
 
@@ -41,7 +40,7 @@
     - Gateway 将消息封装后 Produce 到 Kafka。
     - Consumer 消费 kafka 消息，调用 Service。
     - Service 请求 Redis 获取 Seq ID。
-    - Service 并行写入 PostgreSQL (持久化) 和 Elasticsearch (索引)。
+    - Service 并行写入 PostgreSQL (持久化、索引)。
     - Service 将处理后的消息 Publish 到 Redis Pub/Sub。
 2. 实时消息推送链路 (Read Path)
     - 全量广播给所有 Gateway 节点，由 Gateway 节点自行判断本地有哪些连接属于该群

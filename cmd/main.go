@@ -4,18 +4,17 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/Gopher0727/ChatRoom/config"
 	"github.com/Gopher0727/ChatRoom/internal/cache"
 	"github.com/Gopher0727/ChatRoom/internal/handlers"
-	"github.com/Gopher0727/ChatRoom/internal/routers"
-	"github.com/Gopher0727/ChatRoom/pkg/middlewares"
-
 	"github.com/Gopher0727/ChatRoom/internal/repositories"
-
+	"github.com/Gopher0727/ChatRoom/internal/routers"
 	"github.com/Gopher0727/ChatRoom/internal/services"
+	"github.com/Gopher0727/ChatRoom/pkg/middlewares"
 	"github.com/Gopher0727/ChatRoom/pkg/utils"
 	"github.com/Gopher0727/ChatRoom/pkg/ws"
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -53,8 +52,14 @@ func main() {
 	userService := services.NewUserService(userRepo)
 	guildService := services.NewGuildService(guildRepo, userRepo)
 
-	// 初始化 WebSocket Hub
-	hub := ws.NewHub(guildRepo, redisClient)
+	// 初始化一致性哈希环（用于分布式路由）
+	ring := utils.NewHashRing(128)
+	for node, weight := range cfg.Gateway.Nodes {
+		ring.Add(node, weight)
+	}
+
+	// 初始化 WebSocket Hub（注入哈希环与当前节点ID）
+	hub := ws.NewHub(guildRepo, redisClient, ring, cfg.Gateway.NodeID)
 	go hub.Run()
 
 	// 初始化处理器

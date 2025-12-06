@@ -122,6 +122,7 @@ func (s *GuildService) JoinGuild(userID uint, code string) error {
 type SendMessageRequest struct {
 	Content string `json:"content" binding:"required"`
 	MsgType string `json:"msg_type"` // 可选，默认为 text
+	NodeID  string `json:"node_id"`  // 新增：一致性哈希命中的节点ID
 }
 
 type MessageResponse struct {
@@ -134,6 +135,7 @@ type MessageResponse struct {
 	MsgType      string    `json:"msg_type"`
 	SequenceID   int64     `json:"sequence_id"`
 	CreatedAt    time.Time `json:"created_at"`
+	NodeID       string    `json:"node_id"` // 新增：命中节点ID
 }
 
 // 填充发送者信息
@@ -265,6 +267,7 @@ func (s *GuildService) SendMessage(userID, guildID uint, req *SendMessageRequest
 		MsgType:    msg.MsgType,
 		SequenceID: msg.SequenceID,
 		CreatedAt:  msg.CreatedAt,
+		NodeID:     req.NodeID, // 透传节点ID
 	}
 	s.fillSenderInfo(resp)
 
