@@ -279,6 +279,17 @@ func (r *GuildRepository) GetUserGuildIDs(userID uint) ([]uint, error) {
 	return guildIDs, err
 }
 
+// GetGuildsByUserID 获取用户加入的所有 Guild 详情
+func (r *GuildRepository) GetGuildsByUserID(userID uint) ([]models.Guild, error) {
+	var guilds []models.Guild
+	// 联表查询：通过 members 表连接获取 guilds
+	// 注意：GuildMember 模型的 TableName 是 "members"
+	err := r.db.Joins("JOIN members ON members.guild_id = guilds.id").
+		Where("members.user_id = ?", userID).
+		Find(&guilds).Error
+	return guilds, err
+}
+
 // GetGuildMemberIDs 获取 Guild 的所有成员 ID
 func (r *GuildRepository) GetGuildMemberIDs(guildID uint) ([]uint, error) {
 	// 尝试从 Redis 获取

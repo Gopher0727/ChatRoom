@@ -90,7 +90,7 @@ func (h *GuildHandler) JoinGuild(c *gin.Context) {
 		return
 	}
 
-	err := h.GuildService.JoinGuild(userID.(uint), req.InviteCode)
+	guild, err := h.GuildService.JoinGuild(userID.(uint), req.InviteCode)
 	if err != nil {
 		if errors.Is(err, services.ErrInviteNotFound) || errors.Is(err, services.ErrInviteExpired) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -102,7 +102,10 @@ func (h *GuildHandler) JoinGuild(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "成功加入服务器"})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "成功加入服务器",
+		"guild":   guild,
+	})
 }
 
 // SendMessage 解析 URL 参数 guild_id 和请求体内容，发送消息
@@ -137,7 +140,6 @@ func (h *GuildHandler) SendMessage(c *gin.Context) {
 	}
 
 	// 广播消息给 WebSocket 客户端
-	// TODO
 	h.Hub.BroadcastToGuild(uint(guildID), resp)
 
 	c.JSON(http.StatusCreated, resp)
@@ -198,4 +200,21 @@ func (h *GuildHandler) GetMessages(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// GetMyGuilds 获取当前用户加入的所有 Guild
+func (h *GuildHandler) GetMyGuilds(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权访问"})
+		return
+	}
+
+	guilds, err := h.GuildService.GetUserGuilds(userID.(uint))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, guilds)
 }

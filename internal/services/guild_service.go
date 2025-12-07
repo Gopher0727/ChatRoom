@@ -67,7 +67,7 @@ type CreateInviteResponse struct {
 
 // CreateInvite 检查请求用户是否为 Guild 成员，生成唯一邀请码，设置过期时间，并持久化到数据库
 func (s *GuildService) CreateInvite(userID, guildID uint) (*CreateInviteResponse, error) {
-	// 检查用户是否是成员（通常只有成员才能邀请，或者只有管理员，这里简化为成员）
+	// 检查用户是否是成员
 	isMember, err := s.GuildRepo.IsMember(guildID, userID)
 	if err != nil {
 		return nil, err
@@ -97,26 +97,30 @@ func (s *GuildService) CreateInvite(userID, guildID uint) (*CreateInviteResponse
 }
 
 // JoinGuild 验证邀请码有效性（存在且未过期），检查用户是否已是成员，若通过则将用户添加到 Guild 成员列表
-func (s *GuildService) JoinGuild(userID uint, code string) error {
+func (s *GuildService) JoinGuild(userID uint, code string) (*models.Guild, error) {
 	invite, err := s.GuildRepo.GetInviteByCode(code)
 	if err != nil {
-		return ErrInviteNotFound
+		return nil, ErrInviteNotFound
 	}
 
 	if invite.ExpiresAt.Before(time.Now()) {
-		return ErrInviteExpired
+		return nil, ErrInviteExpired
 	}
 
 	// 检查是否已经是成员
 	isMember, err := s.GuildRepo.IsMember(invite.GuildID, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if isMember {
-		return ErrAlreadyMember
+		return nil, ErrAlreadyMember
 	}
 
-	return s.GuildRepo.AddMember(invite.GuildID, userID)
+	if err := s.GuildRepo.AddMember(invite.GuildID, userID); err != nil {
+		return nil, err
+	}
+
+	return s.GuildRepo.GetGuildByID(invite.GuildID)
 }
 
 type SendMessageRequest struct {
@@ -170,7 +174,8 @@ func (s *GuildService) populateMessageSenders(msgs []models.Message) ([]MessageR
 		usersMap, _ = s.UserRepo.GetByIDs(senderIDs)
 	}
 
-	var resp []MessageResponse
+	// 初始化为空切片，确保 JSON 序列化为 [] 而不是 null
+	resp := make([]MessageResponse, 0)
 	for _, m := range msgs {
 		r := MessageResponse{
 			ID:         m.ID,
@@ -345,4 +350,9 @@ func (s *GuildService) GetMessagesAfterSequence(userID, guildID uint, afterSeq i
 // GetUserGuildIDs 获取用户加入的所有 Guild ID
 func (s *GuildService) GetUserGuildIDs(userID uint) ([]uint, error) {
 	return s.GuildRepo.GetUserGuildIDs(userID)
+}
+
+// GetUserGuilds 获取用户加入的所有 Guild 详细信息
+func (s *GuildService) GetUserGuilds(userID uint) ([]models.Guild, error) {
+	return s.GuildRepo.GetGuildsByUserID(userID)
 }

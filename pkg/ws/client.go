@@ -79,9 +79,8 @@ func (c *Client) readPump() {
 		return nil
 	})
 
-	// 拉取离线消息
-	// 异步执行，防止阻塞 readPump 导致心跳超时
-	go c.syncOfflineMessages()
+	// 拉取最近的历史消息，确保用户登录后能看到上下文
+	go c.pushRecentMessages()
 
 	for {
 		_, message, err := c.conn.ReadMessage()
@@ -154,6 +153,36 @@ func (c *Client) syncOfflineMessages() {
 		// 阻塞发送，确保消息不丢失（除非连接断开）
 		// 因为是在独立的 goroutine 中，不会阻塞心跳检测
 		c.send <- broadcastMsg
+	}
+}
+
+// pushRecentMessages 拉取并发送最近的历史消息
+func (c *Client) pushRecentMessages() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Recovered from panic in pushRecentMessages: %v", r)
+		}
+	}()
+
+	// 限制每个 Guild 推送的消息数量
+	const recentCount = 20
+
+	for _, guildID := range c.guildIDs {
+		msgs, err := c.guildService.GetMessages(c.userID, guildID, recentCount, 0)
+		if err != nil {
+			log.Printf("Error getting recent messages for guild %d: %v", guildID, err)
+			continue
+		}
+
+		// GetMessages 返回的是按时间倒序 (Newest -> Oldest)
+		// 我们需要按时间正序发送 (Oldest -> Newest)
+		for i := len(msgs) - 1; i >= 0; i-- {
+			broadcastMsg := &BroadcastMessage{
+				GuildID: msgs[i].GuildID,
+				Message: msgs[i],
+			}
+			c.send <- broadcastMsg
+		}
 	}
 }
 

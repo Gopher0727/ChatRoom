@@ -20,7 +20,10 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config,
 	hub *ws.Hub, // 注入 Hub
 	guildService *services.GuildService, // 注入 GuildService 用于 WS
 ) {
-	r.Use(cors.Default())
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	r.Use(cors.New(config))
 
 	// 全局限流中间件 (防止 QPS 过高)
 	// 使用配置中的参数，并设置等待超时时间
@@ -45,6 +48,10 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config,
 	// 注册路由
 	RegisterUserRoutes(r, userHandler)
 	RegisterGuildRoutes(r, guildHandler)
+
+	// 静态文件服务 (用于前端演示)
+	r.StaticFile("/", "./web/index.html")
+	r.Static("/static", "./web")
 }
 
 // UserHandler 接口定义
@@ -71,7 +78,8 @@ func RegisterGuildRoutes(r *gin.Engine, guildHandler *handlers.GuildHandler) {
 	guildGroup := r.Group("/api/v1/guilds")
 	guildGroup.Use(middlewares.AuthMiddleware())
 	{
-		guildGroup.POST("", guildHandler.CreateGuild) // 创建服务器
+		guildGroup.POST("", guildHandler.CreateGuild)     // 创建服务器
+		guildGroup.GET("/mine", guildHandler.GetMyGuilds) // 获取我的服务器列表
 
 		// 成员管理
 		guildGroup.POST("/join", guildHandler.JoinGuild) // 加入服务器 (通过邀请码)

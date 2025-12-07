@@ -3,8 +3,10 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strconv"
 	"sync"
+	"time"
 
 	redis "github.com/redis/go-redis/v9"
 
@@ -175,18 +177,33 @@ func (h *Hub) Run() {
 
 func (h *Hub) subscribeToRedis() {
 	ctx := context.Background()
-	pubsub := h.redis.Subscribe(ctx, redisChannelName)
-	defer pubsub.Close()
-
-	ch := pubsub.Channel()
-	for msg := range ch {
-		var broadcastMsg BroadcastMessage
-		if err := json.Unmarshal([]byte(msg.Payload), &broadcastMsg); err == nil {
-			// 将从 Redis 收到的消息发送到本地广播通道
-			// 注意：这里不需要再 Publish 到 Redis，否则会死循环
-			// 直接送入 h.broadcast，由 Run() 中的循环分发给本地 WebSocket 连接
-			h.broadcast <- &broadcastMsg
+	// 循环重试，防止连接断开导致订阅失效
+	for {
+		pubsub := h.redis.Subscribe(ctx, redisChannelName)
+		// 等待订阅成功或失败
+		if _, err := pubsub.Receive(ctx); err != nil {
+			log.Printf("Redis subscribe error: %v, retrying in 3s...", err)
+			time.Sleep(3 * time.Second)
+			continue
 		}
+
+		log.Printf("Subscribed to Redis channel: %s", redisChannelName)
+		ch := pubsub.Channel()
+
+		for msg := range ch {
+			var broadcastMsg BroadcastMessage
+			if err := json.Unmarshal([]byte(msg.Payload), &broadcastMsg); err == nil {
+				// 将从 Redis 收到的消息发送到本地广播通道
+				h.broadcast <- &broadcastMsg
+			} else {
+				log.Printf("Failed to unmarshal broadcast message: %v", err)
+			}
+		}
+
+		// Channel 关闭，说明连接断开
+		pubsub.Close()
+		log.Printf("Redis subscription channel closed, reconnecting...")
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -198,11 +215,14 @@ func (h *Hub) BroadcastToGuild(guildID uint, message any) {
 	}
 
 	if h.redis != nil {
-		// 发布到 Redis，让所有实例（包括自己）通过订阅收到消息
-		// 这样可以确保分布式环境下的消息同步
+		// 发布到 Redis
 		payload, err := json.Marshal(msg)
 		if err == nil {
-			h.redis.Publish(context.Background(), redisChannelName, payload)
+			if err := h.redis.Publish(context.Background(), redisChannelName, payload).Err(); err != nil {
+				log.Printf("Redis publish error: %v", err)
+			}
+		} else {
+			log.Printf("JSON marshal error: %v", err)
 		}
 	} else {
 		// 如果没有 Redis，回退到仅本地广播

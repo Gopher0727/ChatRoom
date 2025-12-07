@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go ChatRoom Demo</title>
+    <style>
+        :root {
+            --primary-color: #5865F2;
+            --bg-color: #36393f;
+            --sidebar-bg: #2f3136;
+            --chat-bg: #36393f;
+            --text-color: #dcddde;
+            --input-bg: #40444b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Login/Register Styles */
+        #auth-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .auth-box {
+            background-color: var(--sidebar-bg);
+            padding: 2rem;
+            border-radius: 8px;
+            width: 300px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .auth-box h2 {
+            text-align: center;
+            color: #fff;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: var(--input-bg);
+            border: 1px solid #202225;
+            border-radius: 4px;
+            color: #fff;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #4752c4;
+        }
+
+        .switch-auth {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9em;
+            cursor: pointer;
+            color: var(--primary-color);
+        }
+
+        /* Main App Styles */
+        #app-container {
+            display: none;
+            /* Hidden by default */
+            width: 100%;
+            height: 100%;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background-color: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            border-right: 1px solid #202225;
+        }
+
+        .user-info {
+            padding: 10px;
+            border-bottom: 1px solid #202225;
+            margin-bottom: 10px;
+        }
+
+        .guild-controls {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #202225;
+        }
+
+        .guild-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .guild-item {
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+
+        .guild-item:hover {
+            background-color: #40444b;
+        }
+
+        .guild-item.active {
+            background-color: #40444b;
+            color: #fff;
+        }
+
+        /* Chat Area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--chat-bg);
+        }
+
+        .chat-header {
+            padding: 15px;
+            border-bottom: 1px solid #26272d;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .username {
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .timestamp {
+            font-size: 0.75em;
+            color: #72767d;
+        }
+
+        .content {
+            color: #dcddde;
+            word-wrap: break-word;
+        }
+
+        .input-area {
+            padding: 20px;
+            background-color: var(--chat-bg);
+        }
+
+        .input-area form {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Utility */
+        .hidden {
+            display: none !important;
+        }
+
+        .invite-code-display {
+            background: #202225;
+            padding: 5px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin-top: 5px;
+            user-select: all;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Auth Container -->
+    <div id="auth-container">
+        <div class="auth-box" id="login-box">
+            <h2>登录</h2>
+            <input type="text" id="login-username" placeholder="用户名">
+            <input type="password" id="login-password" placeholder="密码">
+            <button onclick="login()">登录</button>
+            <div class="switch-auth" onclick="showRegister()">没有账号？去注册</div>
+        </div>
+
+        <div class="auth-box hidden" id="register-box">
+            <h2>注册</h2>
+            <input type="text" id="reg-username" placeholder="用户名">
+            <input type="email" id="reg-email" placeholder="邮箱">
+            <input type="password" id="reg-password" placeholder="密码">
+            <button onclick="register()">注册</button>
+            <div class="switch-auth" onclick="showLogin()">已有账号？去登录</div>
+        </div>
+    </div>
+
+    <!-- App Container -->
+    <div id="app-container" class="hidden">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="user-info">
+                <div id="current-username" style="font-weight: bold; color: #fff;">User</div>
+                <div style="font-size: 0.8em; color: #b9bbbe;">ID: <span id="current-userid"></span></div>
+                <button onclick="logout()"
+                    style="padding: 5px; margin-top: 5px; font-size: 0.8em; background-color: #ed4245;">退出登录</button>
+            </div>
+
+            <div class="guild-controls">
+                <input type="text" id="new-guild-topic" placeholder="新群组名称" style="font-size: 0.9em;">
+                <button onclick="createGuild()"
+                    style="padding: 5px; font-size: 0.9em; background-color: #3ba55c;">创建群组</button>
+
+                <div style="margin-top: 10px; border-top: 1px solid #3f4147; padding-top: 10px;">
+                    <input type="text" id="join-invite-code" placeholder="输入邀请码" style="font-size: 0.9em;">
+                    <button onclick="joinGuild()" style="padding: 5px; font-size: 0.9em;">加入群组</button>
+                </div>
+            </div>
+
+            <div
+                style="padding: 0 10px; font-size: 0.8em; text-transform: uppercase; color: #8e9297; font-weight: bold;">
+                我的群组 (手动切换)
+            </div>
+            <div class="guild-list" id="guild-list">
+                <!-- Guild items will be added here -->
+                <div style="padding: 10px; color: #72767d; font-size: 0.9em;">
+                    暂无群组列表接口，<br>请创建或加入后<br>在此临时显示。
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <span id="chat-title">请选择或创建一个群组</span>
+                <button id="invite-btn" onclick="createInvite()" class="hidden"
+                    style="width: auto; padding: 5px 10px; font-size: 0.9em; background-color: #5865F2;">生成邀请码</button>
+            </div>
+            <div id="invite-result" style="padding: 0 15px; display: none;"></div>
+
+            <div class="messages" id="messages-container">
+                <!-- Messages go here -->
+            </div>
+
+            <div class="input-area">
+                <form onsubmit="sendMessage(event)">
+                    <input type="text" id="message-input" placeholder="发送消息..." disabled autocomplete="off">
+                    <button type="submit" id="send-btn" style="width: 80px;" disabled>发送</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:9000/api/v1';
+        const WS_BASE = 'ws://localhost:9000/ws';
+
+        let state = {
+            token: sessionStorage.getItem('token') || null,
+            user: JSON.parse(sessionStorage.getItem('user') || 'null'),
+            currentGuildId: null,
+            guilds: [],
+            socket: null
+        };
+
+        // --- Auth Functions ---
+
+        function showRegister() {
+            document.getElementById('login-box').classList.add('hidden');
+            document.getElementById('register-box').classList.remove('hidden');
+        }
+
+        function showLogin() {
+            document.getElementById('register-box').classList.add('hidden');
+            document.getElementById('login-box').classList.remove('hidden');
+        }
+
+        async function register() {
+            const username = document.getElementById('reg-username').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/users/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('注册成功，请登录');
+                    showLogin();
+                } else {
+                    alert('注册失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('请求错误: ' + e);
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/users/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    state.token = data.token;
+                    state.user = { id: data.user_id, username: data.username, email: data.email };
+                    sessionStorage.setItem('token', state.token);
+                    sessionStorage.setItem('user', JSON.stringify(state.user));
+                    initApp();
+                } else {
+                    alert('登录失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('请求错误: ' + e);
+            }
+        }
+
+        function logout() {
+            state.token = null;
+            state.user = null;
+            state.currentGuildId = null;
+            if (state.socket) {
+                state.socket.close();
+            }
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
+            location.reload();
+        }
+
+        // --- App Logic ---
+
+        function initApp() {
+            if (!state.token) return;
+
+            document.getElementById('auth-container').classList.add('hidden');
+            document.getElementById('app-container').classList.remove('hidden');
+
+            document.getElementById('current-username').textContent = state.user.username;
+            document.getElementById('current-userid').textContent = state.user.id;
+
+            fetchGuildList(); // 从服务器获取最新的群组列表
+            connectWS();
+        }
+
+        async function fetchGuildList() {
+            try {
+                const res = await fetch(`${API_BASE}/guilds/mine`, {
+                    headers: { 'Authorization': `Bearer ${state.token}` }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    state.guilds = data || [];
+                    // 更新 sessionStorage，虽然现在主要依赖内存中的 state.guilds
+                    sessionStorage.setItem('guilds', JSON.stringify(state.guilds));
+                    renderGuildList();
+                } else {
+                    console.error('Failed to fetch guilds:', data.error);
+                }
+            } catch (e) {
+                console.error('Error fetching guilds:', e);
+            }
+        }
+
+        function connectWS() {
+            if (state.socket) return;
+
+            state.socket = new WebSocket(`${WS_BASE}?token=${state.token}`);
+
+            state.socket.onopen = () => {
+                console.log('WebSocket Connected');
+            };
+
+            state.socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                // data structure: { guild_id: 1, message: { ... } }
+
+                if (data.guild_id === state.currentGuildId) {
+                    appendMessage(data.message);
+                } else {
+                    // 可以添加未读消息提示逻辑
+                    console.log(`Received message for guild ${data.guild_id}`);
+                }
+            };
+
+            state.socket.onclose = () => {
+                console.log('WebSocket Disconnected');
+                state.socket = null;
+                // 简单的重连逻辑
+                setTimeout(connectWS, 3000);
+            };
+        }
+
+        // --- Guild Functions ---
+
+        async function createGuild() {
+            const topic = document.getElementById('new-guild-topic').value;
+            if (!topic) return alert('请输入群组名称');
+
+            try {
+                const res = await fetch(`${API_BASE}/guilds`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${state.token}`
+                    },
+                    body: JSON.stringify({ topic })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`群组 "${data.topic}" 创建成功 (ID: ${data.id})`);
+                    // 刷新列表
+                    await fetchGuildList();
+                    // 重连 WebSocket 以更新订阅关系
+                    if (state.socket) {
+                        state.socket.close();
+                        state.socket = null;
+                        setTimeout(connectWS, 500);
+                    }
+                    document.getElementById('new-guild-topic').value = '';
+                } else {
+                    alert('创建失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('请求错误: ' + e);
+            }
+        }
+
+        async function joinGuild() {
+            const code = document.getElementById('join-invite-code').value;
+            if (!code) return alert('请输入邀请码');
+
+            try {
+                const res = await fetch(`${API_BASE}/guilds/join`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${state.token}`
+                    },
+                    body: JSON.stringify({ invite_code: code })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('加入成功');
+                    // 刷新列表
+                    await fetchGuildList();
+                    // 重连 WebSocket 以更新订阅关系
+                    if (state.socket) {
+                        state.socket.close();
+                        state.socket = null;
+                        setTimeout(connectWS, 500);
+                    }
+                    document.getElementById('join-invite-code').value = '';
+                } else {
+                    alert('加入失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('请求错误: ' + e);
+            }
+        }
+
+        async function createInvite() {
+            if (!state.currentGuildId) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/guilds/${state.currentGuildId}/invites`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.token}`
+                    }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    const resultDiv = document.getElementById('invite-result');
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `<div class="invite-code-display">邀请码: ${data.code}</div>`;
+                } else {
+                    alert('生成邀请码失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('请求错误: ' + e);
+            }
+        }
+
+        // --- Chat Functions ---
+
+        function renderGuildList() {
+            const list = document.getElementById('guild-list');
+            list.innerHTML = '';
+            state.guilds.forEach(g => {
+                const item = document.createElement('div');
+                item.className = `guild-item ${state.currentGuildId === g.id ? 'active' : ''}`;
+                item.textContent = `${g.topic} (ID: ${g.id})`;
+                item.onclick = () => selectGuild(g.id, g.topic);
+                list.appendChild(item);
+            });
+        }
+
+        async function selectGuild(id, topic) {
+            state.currentGuildId = id;
+            document.getElementById('chat-title').textContent = `# ${topic}`;
+            document.getElementById('invite-btn').classList.remove('hidden');
+            document.getElementById('invite-result').style.display = 'none';
+            document.getElementById('message-input').disabled = false;
+            document.getElementById('send-btn').disabled = false;
+
+            renderGuildList(); // update active state
+
+            // Load history
+            await loadMessages(id);
+        }
+
+        async function loadMessages(guildId) {
+            const container = document.getElementById('messages-container');
+            container.innerHTML = '<div style="text-align:center; color:#72767d;">加载中...</div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/guilds/${guildId}/messages?limit=50`, {
+                    headers: { 'Authorization': `Bearer ${state.token}` }
+                });
+                const data = await res.json();
+
+                container.innerHTML = '';
+                if (res.ok && Array.isArray(data)) {
+                    // API 返回的是倒序 (最新的在前)，我们需要正序显示
+                    data.reverse().forEach(msg => appendMessage(msg));
+                    scrollToBottom();
+                } else {
+                    container.innerHTML = '<div style="text-align:center; color:#ed4245;">加载失败</div>';
+                }
+            } catch (e) {
+                console.error(e);
+                container.innerHTML = '<div style="text-align:center; color:#ed4245;">加载错误</div>';
+            }
+        }
+
+        function appendMessage(msg) {
+            const container = document.getElementById('messages-container');
+            const div = document.createElement('div');
+            div.className = 'message';
+
+            const date = new Date(msg.created_at).toLocaleString();
+
+            div.innerHTML = `
+                <div class="message-header">
+                    <span class="username">${msg.sender_name}</span>
+                    <span class="timestamp">${date}</span>
+                </div>
+                <div class="content">${escapeHtml(msg.content)}</div>
+            `;
+            container.appendChild(div);
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messages-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function sendMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('message-input');
+            const content = input.value.trim();
+
+            if (!content || !state.currentGuildId) return;
+
+            // 使用 WebSocket 发送
+            if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                const payload = {
+                    guild_id: state.currentGuildId,
+                    content: content,
+                    msg_type: 'text'
+                };
+                state.socket.send(JSON.stringify(payload));
+                input.value = '';
+            } else {
+                alert('WebSocket 未连接');
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Check login on load
+        if (state.token) {
+            initApp();
+        }
+    </script>
+</body>
+
+</html>
