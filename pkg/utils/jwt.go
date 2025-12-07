@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	ErrInvalidToken = errors.New("invalid token")
-	ErrExpiredToken = errors.New("token expired")
-	jwtSecret       = []byte("your-secret-key-change-in-production") // 生产环境应从配置读取
+	ErrInvalidToken = errors.New("无效的 token")
+	ErrExpiredToken = errors.New("token 已过期")
+	jwtSecret       = []byte("your-secret-key-change-in-production")
 )
 
 // Claims JWT 声明
@@ -59,7 +59,7 @@ func ParseToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-// SetJWTSecret 设置JWT密钥（用于配置）
+// SetJWTSecret 设置 JWT 密钥（用于配置）
 func SetJWTSecret(secret string) {
 	jwtSecret = []byte(secret)
 }

@@ -14,6 +14,7 @@ type Config struct {
 	RateLimit  RateLimitConfig  `mapstructure:"ratelimit"`
 	WorkerPool WorkerPoolConfig `mapstructure:"worker_pool"`
 	Gateway    GatewayConfig    `mapstructure:"gateway"`
+	Kafka      KafkaConfig      `mapstructure:"kafka"`
 }
 
 type ServerConfig struct {
@@ -60,6 +61,12 @@ type GatewayConfig struct {
 	Nodes  map[string]int `mapstructure:"nodes"`
 }
 
+type KafkaConfig struct {
+	Brokers []string `mapstructure:"brokers"`
+	Topic   string   `mapstructure:"topic"`
+	GroupID string   `mapstructure:"group_id"`
+}
+
 func LoadConfig(path string) (*Config, error) {
 	v := viper.New()
 
@@ -67,13 +74,13 @@ func LoadConfig(path string) (*Config, error) {
 
 	if err := v.ReadInConfig(); err != nil {
 		// 如果文件不存在，可以根据情况决定是报错还是使用默认值
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
 	// 将配置反序列化到结构体
 	var config Config
 	if err := v.Unmarshal(&config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+		return nil, fmt.Errorf("解析配置失败: %w", err)
 	}
 	return &config, nil
 }

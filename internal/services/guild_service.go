@@ -241,12 +241,12 @@ func (s *GuildService) SendMessage(userID, guildID uint, req *SendMessageRequest
 	// 获取所有成员和在线成员，计算出离线成员
 	allMembers, err := s.GuildRepo.GetGuildMemberIDs(guildID)
 	if err != nil {
-		log.Printf("Error getting guild members: %v", err)
+		log.Printf("获取服务器成员失败: %v", err)
 	}
 
 	onlineMembers, err := s.GuildRepo.GetOnlineUserIDsInGuild(guildID)
 	if err != nil {
-		log.Printf("Error getting online members: %v", err)
+		log.Printf("获取在线成员失败: %v", err)
 	}
 
 	onlineSet := make(map[uint]bool)
@@ -259,7 +259,7 @@ func (s *GuildService) SendMessage(userID, guildID uint, req *SendMessageRequest
 		// 不给自己存离线消息，只给离线的成员存
 		if !onlineSet[memberID] && memberID != userID {
 			if err := s.GuildRepo.PushToInbox(memberID, msg); err != nil {
-				log.Printf("Error pushing to inbox for user %d: %v", memberID, err)
+				log.Printf("推送到用户 %d 的收件箱失败: %v", memberID, err)
 			}
 		}
 	}
@@ -345,6 +345,59 @@ func (s *GuildService) GetMessagesAfterSequence(userID, guildID uint, afterSeq i
 	}
 
 	return s.populateMessageSenders(msgs)
+}
+
+// AckMessage 确认消息已读
+func (s *GuildService) AckMessage(userID, guildID uint, sequenceID int64) error {
+	// 检查成员资格
+	isMember, err := s.GuildRepo.IsMember(guildID, userID)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return ErrUserNotMember
+	}
+	return s.GuildRepo.UpdateLastRead(guildID, userID, sequenceID)
+}
+
+type GuildWithUnread struct {
+	ID          uint      `json:"id"`
+	Topic       string    `json:"topic"`
+	OwnerID     uint      `json:"owner_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UnreadCount int64     `json:"unread_count"`
+}
+
+// GetUserGuildsWithUnread 获取用户加入的所有 Guild 详细信息及未读数
+func (s *GuildService) GetUserGuildsWithUnread(userID uint) ([]GuildWithUnread, error) {
+	results, err := s.GuildRepo.GetGuildsAndMemberInfoByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var guilds []GuildWithUnread
+	for _, res := range results {
+		maxSeq, err := s.GuildRepo.GetMaxSequenceID(res.ID)
+		if err != nil {
+			// Log error but continue
+			log.Printf("获取 Guild %d 最大 SequenceID 失败: %v", res.ID, err)
+			maxSeq = res.LastReadMsgID // 假设没有新消息
+		}
+
+		unread := maxSeq - res.LastReadMsgID
+		if unread < 0 {
+			unread = 0
+		}
+
+		guilds = append(guilds, GuildWithUnread{
+			ID:          res.ID,
+			Topic:       res.Topic,
+			OwnerID:     res.OwnerID,
+			CreatedAt:   res.CreatedAt,
+			UnreadCount: unread,
+		})
+	}
+	return guilds, nil
 }
 
 // GetUserGuildIDs 获取用户加入的所有 Guild ID

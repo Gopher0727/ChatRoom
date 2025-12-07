@@ -54,6 +54,14 @@ type MessageResponse struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type GuildWithUnread struct {
+	ID          uint      `json:"id"`
+	Topic       string    `json:"topic"`
+	OwnerID     uint      `json:"owner_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UnreadCount int64     `json:"unread_count"`
+}
+
 func CreateUser(t *testing.T) string {
 	// 使用局部随机数生成器，避免全局锁竞争，并确保随机性
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -183,4 +191,25 @@ func getMessagesAfter(t *testing.T, token string, guildID uint, afterSeq int64) 
 		t.Fatalf("Failed to unmarshal messages response: %v", err)
 	}
 	return msgs
+}
+
+func getMyGuilds(t *testing.T, token string) []GuildWithUnread {
+	resp, err := sendRequest("GET", BaseURL+"/guilds/mine", token, nil)
+	if err != nil {
+		t.Fatalf("GetMyGuilds failed: %v", err)
+	}
+	var guilds []GuildWithUnread
+	if err := json.Unmarshal(resp, &guilds); err != nil {
+		t.Fatalf("Failed to unmarshal guilds response: %v", err)
+	}
+	return guilds
+}
+
+func ackMessage(t *testing.T, token string, guildID uint, sequenceID int64) {
+	data := map[string]int64{"sequence_id": sequenceID}
+	body, _ := json.Marshal(data)
+	_, err := sendRequest("POST", fmt.Sprintf("%s/guilds/%d/ack", BaseURL, guildID), token, body)
+	if err != nil {
+		t.Fatalf("AckMessage failed: %v", err)
+	}
 }

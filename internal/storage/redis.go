@@ -1,4 +1,4 @@
-package cache
+package storage
 
 import (
 	"context"
@@ -24,7 +24,7 @@ func InitRedis(host, port, password string, db, poolSize, minIdleConns int) (*re
 
 	err := client.Ping(ctx).Err()
 	if err != nil {
-		log.Printf("Failed to connect to Redis: %v", err)
+		log.Printf("连接 Redis 失败: %v", err)
 		return nil, err
 	}
 

@@ -31,3 +31,6 @@ size = 1000
 queue_size = 100000
 
 [kafka]
+brokers = ["localhost:9092"]
+topic = "chat_messages"
+group_id = "chat_consumer_group"

@@ -34,7 +34,7 @@ func RateLimitMiddleware(waitTimeout time.Duration) gin.HandlerFunc {
 			// 这样可以处理瞬时的流量尖峰，只要在超时时间内能拿到令牌即可
 			if !globalLimiter.WaitN(1, waitTimeout) {
 				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-					"error": "Too Many Requests - Server is busy, please try again later",
+					"error": "请求过多 - 服务器繁忙，请稍后再试",
 				})
 				return
 			}
@@ -58,7 +58,7 @@ func MaxConcurrencyMiddleware(maxConcurrent int) gin.HandlerFunc {
 		default:
 			// 获取失败，说明并发已满，直接拒绝
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
-				"error": "Service Unavailable - Too many concurrent requests",
+				"error": "服务不可用 - 并发请求过多",
 			})
 		}
 	}

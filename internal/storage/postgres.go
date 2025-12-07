@@ -1,4 +1,4 @@
-package cache
+package storage
 
 import (
 	"fmt"
@@ -17,14 +17,14 @@ func InitPostgres(dsn string, maxIdleConns, maxOpenConns int) (*gorm.DB, error) 
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
-		log.Printf("Failed to connect to database: %v", err)
+		log.Printf("连接数据库失败: %v", err)
 		return nil, err
 	}
 
 	// 获取底层 sql.DB 对象以设置连接池
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Printf("Failed to get sql.DB: %v", err)
+		log.Printf("获取 sql.DB 失败: %v", err)
 		return nil, err
 	}
 
@@ -45,7 +45,7 @@ func InitPostgres(dsn string, maxIdleConns, maxOpenConns int) (*gorm.DB, error) 
 		&models.Message{},
 	)
 	if err != nil {
-		log.Printf("Failed to migrate models: %v", err)
+		log.Printf("模型迁移失败: %v", err)
 		return nil, err
 	}
 	return db, nil

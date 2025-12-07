@@ -10,6 +10,7 @@ import (
 	"github.com/Gopher0727/ChatRoom/internal/handlers"
 	"github.com/Gopher0727/ChatRoom/internal/services"
 	"github.com/Gopher0727/ChatRoom/pkg/middlewares"
+	"github.com/Gopher0727/ChatRoom/pkg/mq"
 	"github.com/Gopher0727/ChatRoom/pkg/ws"
 )
 
@@ -19,6 +20,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config,
 	guildHandler *handlers.GuildHandler,
 	hub *ws.Hub, // 注入 Hub
 	guildService *services.GuildService, // 注入 GuildService 用于 WS
+	kafkaProducer *mq.KafkaProducer, // 注入 KafkaProducer 用于 WS
 ) {
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
@@ -31,7 +33,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config,
 
 	// WebSocket 路由 (必须在 AsyncMiddleware 之前注册，避免握手请求被放入 Worker Pool)
 	r.GET("/ws", middlewares.AuthMiddleware(), func(c *gin.Context) {
-		ws.ServeWs(hub, guildService, c)
+		ws.ServeWs(hub, guildService, kafkaProducer, c)
 	})
 
 	// 健康检查
@@ -90,5 +92,6 @@ func RegisterGuildRoutes(r *gin.Engine, guildHandler *handlers.GuildHandler) {
 		// 消息相关
 		guildGroup.POST("/:guild_id/messages", guildHandler.SendMessage) // 发送消息
 		guildGroup.GET("/:guild_id/messages", guildHandler.GetMessages)  // 获取消息列表
+		guildGroup.POST("/:guild_id/ack", guildHandler.AckMessage)       // 确认消息已读
 	}
 }

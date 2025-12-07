@@ -84,7 +84,7 @@
     1. 用户连接 Gateway A，Gateway A 在 Redis 写入映射关系，并设置过期时间（心跳续期）。
     2. 逻辑层要发消息给 User B 时，查 Redis 找到 Gateway B，通过 gRPC 将消息投递给 Gateway B。
 
-### 消息风暴优化
+### TODO：消息风暴优化
 
 发送一条消息，需要推给百万人，这是系统的最大瓶颈。
 
@@ -96,10 +96,7 @@
     - 对于百万群，不仅要“推”，还要“丢”。
     - **非重要消息**（如“入群欢迎”、“点赞”）可以只推给当前活跃窗口的用户，或者直接丢弃，让用户下拉刷新时再拉取。
 
-3.  **Kafka 削峰**：
-    - 用户发送消息 -> HTTP/WS -> Producer -> **Kafka Topic (GroupMsg)** -> Consumer (Group Service)。
-
-### 未读数管理 (Redis ZSET 优化)
+### TODO：未读数管理 (Redis ZSET 优化)
 
 对于百万群，实时维护每个人的精确未读数成本极高。
 

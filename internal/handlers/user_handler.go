@@ -29,7 +29,7 @@ func (h *UserHandler) Register(c *gin.Context) {
 	resp, err := h.UserService.Register(&req)
 	if err != nil {
 		if errors.Is(err, services.ErrUserAlreadyExists) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			c.JSON(http.StatusConflict, gin.H{"error": "用户已存在"})
 		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		}
@@ -75,7 +75,7 @@ func (h *UserHandler) Logout(c *gin.Context) {
 	resp, err := h.UserService.Logout(&req)
 	if err != nil {
 		if errors.Is(err, services.ErrUserNotLogin) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "用户未登录"})
 		} else if errors.Is(err, services.ErrPasswordIncorrect) || errors.Is(err, services.ErrUserNotFound) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		} else {
@@ -117,7 +117,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	user, err := h.UserService.GetProfile(userID.(uint))
 	if err != nil {
 		if errors.Is(err, services.ErrUserNotLogin) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "用户未登录"})
 		} else {
 			c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
 		}
@@ -146,7 +146,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	err := h.UserService.UpdateProfile(userID.(uint), req.Nickname, req.AvatarURL)
 	if err != nil {
 		if errors.Is(err, services.ErrUserNotLogin) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "用户未登录"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
@@ -175,7 +175,7 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	err := h.UserService.ChangePassword(userID.(uint), req.OldPassword, req.NewPassword)
 	if err != nil {
 		if errors.Is(err, services.ErrPasswordIncorrect) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "旧密码错误"})
 		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		}

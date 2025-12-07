@@ -12,20 +12,14 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/Gopher0727/ChatRoom/internal/services"
+	"github.com/Gopher0727/ChatRoom/pkg/mq"
 )
 
 const (
-	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
-
-	// Time allowed to read the next pong message from the peer.
-	pongWait = 60 * time.Second
-
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
-
-	// Maximum message size allowed from peer.
-	maxMessageSize = 512
+	writeWait      = 10 * time.Second    // 允许写入消息到对端的最大时间
+	pongWait       = 60 * time.Second    // 允许读取下一个 pong 消息的最大时间
+	pingPeriod     = (pongWait * 9) / 10 // 发送 ping 到对端的周期。必须小于 pongWait
+	maxMessageSize = 512                 // 允许来自对端的最大消息大小
 )
 
 var upgrader = websocket.Upgrader{
@@ -38,22 +32,13 @@ var upgrader = websocket.Upgrader{
 
 // Client 代表一个 WebSocket 连接客户端
 type Client struct {
-	hub *Hub
-
-	// WebSocket 连接
-	conn *websocket.Conn
-
-	// 缓冲通道，用于发送消息
-	send chan *BroadcastMessage
-
-	// 用户 ID
-	userID uint
-
-	// 用户所属的 Guild ID 列表 (用于订阅)
-	guildIDs []uint
-
-	// 服务引用，用于处理接收到的消息
-	guildService *services.GuildService
+	hub           *Hub
+	conn          *websocket.Conn        // WebSocket 连接
+	send          chan *BroadcastMessage // 缓冲通道，用于发送消息
+	userID        uint                   // 用户 ID
+	guildIDs      []uint                 // 用户所属的 Guild ID 列表 (用于订阅)
+	guildService  *services.GuildService // 服务引用，用于处理接收到的消息
+	kafkaProducer *mq.KafkaProducer      // Kafka Producer
 }
 
 // readPump 泵送来自 WebSocket 连接的消息到 Hub
@@ -63,6 +48,7 @@ func (c *Client) readPump() {
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
+
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
@@ -86,7 +72,7 @@ func (c *Client) readPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
+				log.Printf("错误: %v", err)
 			}
 			break
 		}
@@ -99,7 +85,7 @@ func (c *Client) readPump() {
 			MsgType string `json:"msg_type"`
 		}
 		if err := json.Unmarshal(message, &req); err != nil {
-			log.Printf("json unmarshal error: %v", err)
+			log.Printf("json 反序列化错误: %v", err)
 			continue
 		}
 
@@ -114,17 +100,37 @@ func (c *Client) readPump() {
 			MsgType: req.MsgType,
 			NodeID:  nodeID,
 		}
-		resp, err := c.guildService.SendMessage(c.userID, req.GuildID, sendReq)
-		if err != nil {
-			log.Printf("send message error: %v", err)
-			// 可以选择发送错误消息回客户端
-			continue
+
+		// 修改：不再直接调用 Service，而是发送到 Kafka
+		if c.kafkaProducer != nil {
+			kafkaMsg := struct {
+				UserID  uint                         `json:"user_id"`
+				GuildID uint                         `json:"guild_id"`
+				Content *services.SendMessageRequest `json:"content"`
+			}{
+				UserID:  c.userID,
+				GuildID: req.GuildID,
+				Content: sendReq,
+			}
+			// 使用 GuildID 作为 Key，保证同一个群的消息在同一个 Partition，从而有序
+			if err := c.kafkaProducer.SendMessage(strconv.Itoa(int(req.GuildID)), kafkaMsg); err != nil {
+				log.Printf("发送消息到 kafka 失败: %v", err)
+				continue
+			}
+		} else {
+			// 降级处理：如果没有 Kafka，直接调用 Service
+			resp, err := c.guildService.SendMessage(c.userID, req.GuildID, sendReq)
+			if err != nil {
+				log.Printf("发送消息错误: %v", err)
+				// 可以选择发送错误消息回客户端
+				continue
+			}
+
+			// 构造完整的消息模型用于广播
+			c.hub.BroadcastToGuild(req.GuildID, resp)
+
+			log.Printf("用户 %d 发送消息到服务器 %d: %s", c.userID, req.GuildID, resp.Content)
 		}
-
-		// 构造完整的消息模型用于广播
-		c.hub.BroadcastToGuild(req.GuildID, resp)
-
-		log.Printf("User %d sent message to guild %d: %s", c.userID, req.GuildID, resp.Content)
 	}
 }
 
@@ -133,13 +139,13 @@ func (c *Client) syncOfflineMessages() {
 	// 防止向已关闭的 channel 发送导致 panic
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered from panic in syncOfflineMessages: %v", r)
+			log.Printf("syncOfflineMessages 发生 panic 并恢复: %v", r)
 		}
 	}()
 
 	messages, err := c.guildService.GetOfflineMessages(c.userID)
 	if err != nil {
-		log.Printf("Error getting offline messages for user %d: %v", c.userID, err)
+		log.Printf("获取用户 %d 的离线消息失败: %v", c.userID, err)
 		return
 	}
 
@@ -160,7 +166,7 @@ func (c *Client) syncOfflineMessages() {
 func (c *Client) pushRecentMessages() {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered from panic in pushRecentMessages: %v", r)
+			log.Printf("pushRecentMessages 发生 panic 并恢复: %v", r)
 		}
 	}()
 
@@ -170,7 +176,7 @@ func (c *Client) pushRecentMessages() {
 	for _, guildID := range c.guildIDs {
 		msgs, err := c.guildService.GetMessages(c.userID, guildID, recentCount, 0)
 		if err != nil {
-			log.Printf("Error getting recent messages for guild %d: %v", guildID, err)
+			log.Printf("获取服务器 %d 的最近消息失败: %v", guildID, err)
 			continue
 		}
 
@@ -233,17 +239,17 @@ func (c *Client) writePump() {
 }
 
 // ServeWs 处理 WebSocket 请求
-func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
+func ServeWs(hub *Hub, guildService *services.GuildService, kafkaProducer *mq.KafkaProducer, c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
 		return
 	}
 
 	// 升级连接
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("Failed to upgrade websocket: %v", err)
+		log.Printf("升级 websocket 失败: %v", err)
 		return
 	}
 
@@ -251,7 +257,7 @@ func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 	uID := userID.(uint)
 	guildIDs, err := guildService.GetUserGuildIDs(uID)
 	if err != nil {
-		log.Printf("Failed to get user guilds: %v", err)
+		log.Printf("获取用户服务器列表失败: %v", err)
 		conn.Close()
 		return
 	}
@@ -268,17 +274,18 @@ func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 			key := "User:Connect:" + strconv.Itoa(int(uID))
 			// TTL 选择心跳周期的2-3倍，这里暂定 5 分钟，心跳续期在 Pong 处刷新
 			if err := hub.redis.Set(c, key, hub.nodeID, 5*time.Minute).Err(); err != nil {
-				log.Printf("Failed to set user route: %v", err)
+				log.Printf("设置用户路由失败: %v", err)
 			}
 		}
 		// 创建 Client 并注册
 		client := &Client{
-			hub:          hub,
-			conn:         conn,
-			send:         make(chan *BroadcastMessage, 256),
-			userID:       uID,
-			guildIDs:     guildIDs,
-			guildService: guildService,
+			hub:           hub,
+			conn:          conn,
+			send:          make(chan *BroadcastMessage, 256),
+			userID:        uID,
+			guildIDs:      guildIDs,
+			guildService:  guildService,
+			kafkaProducer: kafkaProducer,
 		}
 		client.hub.register <- client
 		go client.writePump()
@@ -288,14 +295,15 @@ func ServeWs(hub *Hub, guildService *services.GuildService, c *gin.Context) {
 
 	// 未命中当前节点：策略1 仍接入本节点（简单版本）
 	// 可选策略2：返回目标节点信息，指导客户端重连
-	log.Printf("User %d mapped to node %s, current node %s", uID, targetNode, hub.nodeID)
+	log.Printf("用户 %d 映射到节点 %s, 当前节点 %s", uID, targetNode, hub.nodeID)
 	client := &Client{
-		hub:          hub,
-		conn:         conn,
-		send:         make(chan *BroadcastMessage, 256),
-		userID:       uID,
-		guildIDs:     guildIDs,
-		guildService: guildService,
+		hub:           hub,
+		conn:          conn,
+		send:          make(chan *BroadcastMessage, 256),
+		userID:        uID,
+		guildIDs:      guildIDs,
+		guildService:  guildService,
+		kafkaProducer: kafkaProducer,
 	}
 	client.hub.register <- client
 	go client.writePump()

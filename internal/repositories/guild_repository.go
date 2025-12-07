@@ -126,12 +126,12 @@ func (r *GuildRepository) CreateMessage(msg *models.Message) error {
 		// 确保 SequenceID 已初始化
 		if err := r.ensureSequenceID(context.Background(), msg.GuildID, key); err != nil {
 			// 记录错误但继续执行，Redis 会从 0 开始或使用现有值
-			fmt.Printf("Error ensuring sequence id: %v\n", err)
+			fmt.Printf("确保 sequence id 存在时出错: %v\n", err)
 		}
 
 		seq, err := r.redis.Incr(context.Background(), key).Result()
 		if err != nil {
-			fmt.Printf("Error generating sequence id: %v\n", err)
+			fmt.Printf("生成 sequence id 失败: %v\n", err)
 		} else {
 			msg.SequenceID = seq
 		}
@@ -368,7 +368,7 @@ func (r *GuildRepository) GetOnlineUserIDsInGuild(guildID uint) ([]uint, error) 
 	// 清理已过期的用户 (Score < 当前时间)
 	now := float64(time.Now().Unix())
 	if err := r.redis.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%f", now)).Err(); err != nil {
-		fmt.Printf("Error cleaning up expired online users: %v\n", err)
+		fmt.Printf("清理过期在线用户失败: %v\n", err)
 	}
 
 	// 获取剩余的在线用户
@@ -467,4 +467,48 @@ func (r *GuildRepository) GetAndClearInbox(userID uint) ([]models.Message, error
 		messages[i], messages[j] = messages[j], messages[i]
 	}
 	return messages, nil
+}
+
+// UpdateLastRead 更新用户在某群组的最后读取消息ID
+func (r *GuildRepository) UpdateLastRead(guildID, userID uint, msgID int64) error {
+	return r.db.Model(&models.GuildMember{}).
+		Where("guild_id = ? AND user_id = ?", guildID, userID).
+		Update("last_read_msg_id", msgID).Error
+}
+
+// GetMaxSequenceID 获取群组当前最大消息 SequenceID
+func (r *GuildRepository) GetMaxSequenceID(guildID uint) (int64, error) {
+	if r.redis != nil {
+		key := fmt.Sprintf("%s%d", guildMessageSeqKeyPrefix, guildID)
+		val, err := r.redis.Get(context.Background(), key).Int64()
+		if err == nil {
+			return val, nil
+		}
+	}
+	// Fallback to DB
+	var maxSeq int64
+	err := r.db.Model(&models.Message{}).
+		Where("guild_id = ?", guildID).
+		Select("COALESCE(MAX(sequence_id), 0)").
+		Scan(&maxSeq).Error
+	return maxSeq, err
+}
+
+type GuildMemberResult struct {
+	ID            uint      `json:"id"`
+	Topic         string    `json:"topic"`
+	OwnerID       uint      `json:"owner_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	LastReadMsgID int64     `json:"last_read_msg_id"`
+}
+
+// GetGuildsAndMemberInfoByUserID 获取用户加入的所有 Guild 详情及成员信息
+func (r *GuildRepository) GetGuildsAndMemberInfoByUserID(userID uint) ([]GuildMemberResult, error) {
+	var results []GuildMemberResult
+	err := r.db.Table("guilds").
+		Joins("JOIN members ON members.guild_id = guilds.id").
+		Where("members.user_id = ?", userID).
+		Select("guilds.id, guilds.topic, guilds.owner_id, guilds.created_at, members.last_read_msg_id").
+		Scan(&results).Error
+	return results, err
 }

@@ -20,23 +20,13 @@ const (
 
 // Hub 维护活跃的客户端连接并广播消息
 type Hub struct {
-	// 注册的客户端
-	clients map[*Client]bool
+	clients map[*Client]bool          // 注册的客户端
+	rooms   map[uint]map[*Client]bool // 房间（Guild）对应的客户端集合 GuildID -> Client -> bool
+	mu      sync.RWMutex              // 互斥锁，保护 map 的并发读写
 
-	// 房间（Guild）对应的客户端集合 GuildID -> Client -> bool
-	rooms map[uint]map[*Client]bool
-
-	// 互斥锁，保护 map 的并发读写
-	mu sync.RWMutex
-
-	// 注册请求通道
-	register chan *Client
-
-	// 注销请求通道
-	unregister chan *Client
-
-	// 广播消息通道 (内部使用)
-	broadcast chan *BroadcastMessage
+	register   chan *Client           // 注册请求通道
+	unregister chan *Client           // 注销请求通道
+	broadcast  chan *BroadcastMessage // 广播消息通道 (内部使用)
 
 	// 注入 GuildRepository 以访问在线状态
 	guildRepo *repositories.GuildRepository
@@ -182,12 +172,12 @@ func (h *Hub) subscribeToRedis() {
 		pubsub := h.redis.Subscribe(ctx, redisChannelName)
 		// 等待订阅成功或失败
 		if _, err := pubsub.Receive(ctx); err != nil {
-			log.Printf("Redis subscribe error: %v, retrying in 3s...", err)
+			log.Printf("Redis 订阅错误: %v, 3秒后重试...", err)
 			time.Sleep(3 * time.Second)
 			continue
 		}
 
-		log.Printf("Subscribed to Redis channel: %s", redisChannelName)
+		log.Printf("已订阅 Redis 频道: %s", redisChannelName)
 		ch := pubsub.Channel()
 
 		for msg := range ch {
@@ -196,13 +186,13 @@ func (h *Hub) subscribeToRedis() {
 				// 将从 Redis 收到的消息发送到本地广播通道
 				h.broadcast <- &broadcastMsg
 			} else {
-				log.Printf("Failed to unmarshal broadcast message: %v", err)
+				log.Printf("反序列化广播消息失败: %v", err)
 			}
 		}
 
 		// Channel 关闭，说明连接断开
 		pubsub.Close()
-		log.Printf("Redis subscription channel closed, reconnecting...")
+		log.Printf("Redis 订阅频道已关闭，正在重连...")
 		time.Sleep(1 * time.Second)
 	}
 }
@@ -219,10 +209,10 @@ func (h *Hub) BroadcastToGuild(guildID uint, message any) {
 		payload, err := json.Marshal(msg)
 		if err == nil {
 			if err := h.redis.Publish(context.Background(), redisChannelName, payload).Err(); err != nil {
-				log.Printf("Redis publish error: %v", err)
+				log.Printf("Redis 发布错误: %v", err)
 			}
 		} else {
-			log.Printf("JSON marshal error: %v", err)
+			log.Printf("JSON 序列化错误: %v", err)
 		}
 	} else {
 		// 如果没有 Redis，回退到仅本地广播
