@@ -2,9 +2,7 @@
 
 ## 系统拆分
 
-### 接入层 (Connection Service)
-
-维护与客户端的 WebSocket 长连接，只做消息的转发，不处理具体业务逻辑。
+### 接入层 (Connection Service) —— 处理 WebSocket 连接和 HTTP 请求
 
 - Nginx 
     - 作为 HTTP 流量入口，负责 SSL 终结、静态资源服务和 API 流量的负载均衡。
@@ -15,7 +13,7 @@
         - 上行：接收客户端消息，不进行复杂业务处理，直接投递到 Kafka。
         - 下行：订阅 Redis Pub/Sub (或 Kafka) 的推送通道，将消息精准推送给目标连接。
 
-### 逻辑层 (Business Service)
+### 逻辑层 (Business Service) —— 处理业务逻辑并消费消息
 
 - API 网关：处理登录、注册、建群、加群等 HTTP 请求，调用 Service 层复用核心逻辑。
 - Service：封装业务逻辑，和 postgresql / Redis 交互
@@ -60,7 +58,41 @@
 - Protobuf
 
 
+## 性能指标
+
+### 容量
+- **并发连接**: 10,000+ / Gateway 节点
+- **消息吞吐**: 10,000+ 消息/秒
+- **消息延迟**: < 100ms (P99)
+
+### 资源使用
+- **Gateway**: ~2GB RAM, 2 CPU (10K 连接)
+- **API**: ~1GB RAM, 2 CPU
+- **Consumer**: ~1GB RAM, 2 CPU
+
+## 安全性
+
+### 认证和授权
+- JWT Token 认证
+- Token 有效期 24 小时
+- 密码 bcrypt 加密存储
+
+### 限流保护
+- 注册/登录: 10 次/分钟/IP
+- 发送消息: 60 次/分钟/用户
+- API 查询: 100 次/分钟/用户
+
+### 输入验证
+- 用户名: 3-20 字符，字母数字下划线
+- 密码: 8-64 字符，必须包含字母和数字
+- 消息内容: 最大 2000 字符
+
+
 ## 关键技术方案
+
+### 为什么可以选择 Nginx 来做负载均衡？
+
+Nginx 适合 c2s / s2c 这种形式的消息走向，而本项目不支持私聊（c2c），可以选用 Nginx 这种通用的解决方案。
 
 ### 消息有序性 (Sequence ID)
 
