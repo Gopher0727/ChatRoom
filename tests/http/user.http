@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:9000/api/v1/users
+@baseUrl = http://127.0.0.1:9000/api/v1/users
 
 POST {{baseUrl}}/register HTTP/1.1
 Content-Type: application/json

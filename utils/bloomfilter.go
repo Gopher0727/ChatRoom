@@ -23,7 +23,7 @@ func NewWithFalsePositiveRate(expectedItems uint64, falsePositiveRate float64) *
 	// 计算最优位数组大小和哈希函数数量
 	m, k := optimalParameters(expectedItems, falsePositiveRate)
 	funcs := make([]hash.Hash64, k)
-	for i := 0; i < k; i++ {
+	for i := range k {
 		funcs[i] = murmur3.SeedNew64(uint64(i))
 	}
 	return &BloomFilter{

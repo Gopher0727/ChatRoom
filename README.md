@@ -146,6 +146,7 @@ Nginx 适合 c2s / s2c 这种形式的消息走向，而本项目不支持私聊
 ## 心得体会
 
 - 大多数业务逻辑（校验、状态变更、token 失效等）放到 Service；Handler 只负责 HTTP/Context 层（解析请求、读 token、返回响应）
+- Git 的使用：如果之前将文件 push 到远端，现在本地进行了修改，并不想放弃修改，而是想要 git 忽略该文件，可以 `git rm --cached <file>` 并且在 `.gitignore` 文件中补充即可
 
 ## 其他工具
 
