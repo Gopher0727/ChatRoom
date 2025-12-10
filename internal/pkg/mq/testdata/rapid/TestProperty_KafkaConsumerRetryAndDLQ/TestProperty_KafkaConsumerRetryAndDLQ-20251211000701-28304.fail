@@ -1,0 +1,48 @@
+# 2025/12/11 00:07:01.162697 [TestProperty_KafkaConsumerRetryAndDLQ] [rapid] draw messageContent: "3u2z0"
+# 2025/12/11 00:07:06.168112 [TestProperty_KafkaConsumerRetryAndDLQ] 
+# 	Error Trace:	d:/Code/GoProjects/ChatRoom/internal/pkg/mq/consumer_property_test.go:118
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:371
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:380
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:205
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:120
+# 	            				d:/Code/GoProjects/ChatRoom/internal/pkg/mq/consumer_property_test.go:73
+# 	            				C:/Users/Gopher/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.0.windows-amd64/src/runtime/asm_amd64.s:1693
+# 	Error:      	Not equal: 
+# 	            	expected: 3
+# 	            	actual  : 0
+# 	Test:       	TestProperty_KafkaConsumerRetryAndDLQ
+# 	Messages:   	Handler should be called 3 times (1 initial + 2 retries), but was called 0 times
+# 2025/12/11 00:07:07.169279 [TestProperty_KafkaConsumerRetryAndDLQ] 
+# 	Error Trace:	d:/Code/GoProjects/ChatRoom/internal/pkg/mq/consumer_property_test.go:130
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:371
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:380
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:205
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:120
+# 	            				d:/Code/GoProjects/ChatRoom/internal/pkg/mq/consumer_property_test.go:73
+# 	            				C:/Users/Gopher/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.0.windows-amd64/src/runtime/asm_amd64.s:1693
+# 	Error:      	Should be true
+# 	Test:       	TestProperty_KafkaConsumerRetryAndDLQ
+# 	Messages:   	Message '3u2z0' should be sent to DLQ after max retries
+# 
+v0.4.8#5292744693566674700
+0x1da9703a67b0dd
+0x0
+0x486e54ffa9c68
+0x3
+0x11031dffea023b
+0x0
+0x1d006a0136b505
+0x38
+0xc7e2c865a236e
+0x0
+0x3ddf31cd014fa
+0x2
+0x17c9e3be91f44d
+0x0
+0x1fafe005ab5c20
+0xffffffffffffffff
+0x625208b8c66d9
+0x0
+0x3661433e163ce
+0x0
+0x3fb1192769fed

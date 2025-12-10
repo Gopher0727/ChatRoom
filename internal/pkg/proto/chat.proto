@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "github.com/Gopher0727/ChatRoom/proto";
+
+// 消息类型
+enum MessageType {
+    TEXT = 0;
+    SYSTEM = 1;
+}
+
+// WebSocket 消息
+message WSMessage {
+    string message_id = 1;
+    string user_id = 2;
+    string guild_id = 3;
+    string content = 4;
+    int64 seq_id = 5;
+    int64 timestamp = 6;
+    MessageType type = 7;
+}
+
+// 历史消息请求
+message HistoryRequest {
+    string guild_id = 1;
+    int64 last_seq_id = 2;
+    int32 limit = 3;
+}
+
+// 历史消息响应
+message HistoryResponse {
+    repeated WSMessage messages = 1;
+    bool has_more = 2;
+}

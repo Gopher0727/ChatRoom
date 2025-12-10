@@ -1,0 +1,199 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "github.com/Gopher0727/ChatRoom/proto";
+
+import "internal/pkg/proto/chat.proto";
+
+// Gateway Service - 用于服务间通信
+// 其他服务可以通过 gRPC 调用 Gateway 来推送消息或管理连接
+service GatewayService {
+    // 推送消息到指定用户的连接
+    rpc PushMessage(PushMessageRequest) returns (PushMessageResponse);
+
+    // 推送消息到 Guild 的所有在线成员
+    rpc BroadcastToGuild(BroadcastRequest) returns (BroadcastResponse);
+
+    // 检查用户是否在线
+    rpc CheckUserOnline(UserStatusRequest) returns (UserStatusResponse);
+
+    // 获取 Gateway 节点信息
+    rpc GetNodeInfo(NodeInfoRequest) returns (NodeInfoResponse);
+
+    // 健康检查
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Message Service - 用于服务间通信
+// Gateway 和其他服务可以调用此服务来处理消息业务逻辑
+service MessageService {
+    // 发送消息（内部调用）
+    rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+
+    // 获取历史消息
+    rpc GetHistory(HistoryRequest) returns (HistoryResponse);
+
+    // 批量获取消息
+    rpc BatchGetMessages(BatchGetMessagesRequest) returns (BatchGetMessagesResponse);
+}
+
+// User Service - 用户相关服务
+service UserService {
+    // 获取用户信息
+    rpc GetUser(GetUserRequest) returns (GetUserResponse);
+
+    // 批量获取用户信息
+    rpc BatchGetUsers(BatchGetUsersRequest) returns (BatchGetUsersResponse);
+
+    // 更新用户在线状态
+    rpc UpdateUserStatus(UpdateUserStatusRequest) returns (UpdateUserStatusResponse);
+}
+
+// Guild Service - Guild 相关服务
+service GuildService {
+    // 获取 Guild 信息
+    rpc GetGuild(GetGuildRequest) returns (GetGuildResponse);
+
+    // 获取 Guild 成员列表
+    rpc GetGuildMembers(GetGuildMembersRequest) returns (GetGuildMembersResponse);
+
+    // 检查用户是否是 Guild 成员
+    rpc CheckMembership(CheckMembershipRequest) returns (CheckMembershipResponse);
+}
+
+// ============ Gateway Service Messages ============
+
+message PushMessageRequest {
+    string user_id = 1;
+    WSMessage message = 2;
+}
+
+message PushMessageResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+message BroadcastRequest {
+    string guild_id = 1;
+    WSMessage message = 2;
+    repeated string exclude_user_ids = 3; // 排除的用户ID列表
+}
+
+message BroadcastResponse {
+    int32 delivered_count = 1;           // 成功推送的用户数
+    repeated string failed_user_ids = 2; // 推送失败的用户ID
+}
+
+message UserStatusRequest {
+    string user_id = 1;
+}
+
+message UserStatusResponse {
+    bool online = 1;
+    string gateway_node = 2; // 用户连接的 Gateway 节点地址
+}
+
+message NodeInfoRequest {}
+
+message NodeInfoResponse {
+    string node_id = 1;
+    string address = 2;
+    int32 connection_count = 3;
+    int64 uptime_seconds = 4;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+    bool healthy = 1;
+    string status = 2;
+}
+
+// ============ Message Service Messages ============
+
+message SendMessageRequest {
+    string user_id = 1;
+    string guild_id = 2;
+    string content = 3;
+    MessageType type = 4;
+}
+
+message SendMessageResponse {
+    WSMessage message = 1;
+    string error = 2;
+}
+
+message BatchGetMessagesRequest {
+    repeated string message_ids = 1;
+}
+
+message BatchGetMessagesResponse {
+    repeated WSMessage messages = 1;
+}
+
+// ============ User Service Messages ============
+
+message GetUserRequest {
+    string user_id = 1;
+}
+
+message GetUserResponse {
+    string user_id = 1;
+    string username = 2;
+    string hub_id = 3;
+    int64 created_at = 4;
+}
+
+message BatchGetUsersRequest {
+    repeated string user_ids = 1;
+}
+
+message BatchGetUsersResponse {
+    repeated GetUserResponse users = 1;
+}
+
+message UpdateUserStatusRequest {
+    string user_id = 1;
+    bool online = 2;
+    string gateway_node = 3;
+}
+
+message UpdateUserStatusResponse {
+    bool success = 1;
+}
+
+// ============ Guild Service Messages ============
+
+message GetGuildRequest {
+    string guild_id = 1;
+}
+
+message GetGuildResponse {
+    string guild_id = 1;
+    string name = 2;
+    string owner_id = 3;
+    string invite_code = 4;
+    int64 created_at = 5;
+}
+
+message GetGuildMembersRequest {
+    string guild_id = 1;
+    int32 limit = 2;
+    int32 offset = 3;
+}
+
+message GetGuildMembersResponse {
+    repeated string user_ids = 1;
+    int32 total_count = 2;
+}
+
+message CheckMembershipRequest {
+    string user_id = 1;
+    string guild_id = 2;
+}
+
+message CheckMembershipResponse {
+    bool is_member = 1;
+    int64 joined_at = 2;
+}
