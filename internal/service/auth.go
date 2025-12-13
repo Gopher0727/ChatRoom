@@ -24,6 +24,7 @@ var (
 type RegisterRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=20"`
 	Password string `json:"password" binding:"required,min=8,max=64"`
+	Email    string `json:"email" binding:"required,email"`
 }
 
 // LoginRequest represents a user login request
@@ -82,6 +83,7 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 		ID:           uuid.New().String(),
 		UserName:     req.Username,
 		PasswordHash: hashedPassword,
+		Email:        req.Email,
 		HubID:        assignHub(), // Automatically bind user to a Hub
 	}
 

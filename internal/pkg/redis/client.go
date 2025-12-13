@@ -15,8 +15,9 @@ type RedisClient interface {
 	GetClient() *redis.Client
 	Ping(ctx context.Context) error
 	GenerateSeqID(ctx context.Context, guildID string) (int64, error)
-	SetUserOnline(ctx context.Context, userID string, ttl time.Duration) error
+	SetUserOnline(ctx context.Context, userID string, gatewayID string, ttl time.Duration) error
 	IsUserOnline(ctx context.Context, userID string) (bool, error)
+	GetUserOnlineStatus(ctx context.Context, userID string) (string, error)
 	RemoveUserOnline(ctx context.Context, userID string) error
 	Publish(ctx context.Context, channel string, message any) error
 	Subscribe(ctx context.Context, channels ...string) (*redis.PubSub, error)
@@ -75,9 +76,9 @@ func (c *Client) GenerateSeqID(ctx context.Context, guildID string) (int64, erro
 	return result, nil
 }
 
-func (c *Client) SetUserOnline(ctx context.Context, userID string, ttl time.Duration) error {
+func (c *Client) SetUserOnline(ctx context.Context, userID string, gatewayID string, ttl time.Duration) error {
 	key := fmt.Sprintf("user:%s:online", userID)
-	err := c.client.Set(ctx, key, "1", ttl).Err()
+	err := c.client.Set(ctx, key, gatewayID, ttl).Err()
 	if err != nil {
 		return fmt.Errorf("failed to set user %s online: %w", userID, err)
 	}
@@ -91,6 +92,15 @@ func (c *Client) IsUserOnline(ctx context.Context, userID string) (bool, error) 
 		return false, fmt.Errorf("failed to check if user %s is online: %w", userID, err)
 	}
 	return result > 0, nil
+}
+
+func (c *Client) GetUserOnlineStatus(ctx context.Context, userID string) (string, error) {
+	key := fmt.Sprintf("user:%s:online", userID)
+	result, err := c.client.Get(ctx, key).Result()
+	if err != nil {
+		return "", err
+	}
+	return result, nil
 }
 
 func (c *Client) RemoveUserOnline(ctx context.Context, userID string) error {

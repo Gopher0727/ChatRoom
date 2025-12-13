@@ -22,7 +22,7 @@ import (
 type MessageHandler struct {
 	connManager   *ConnectionManager
 	kafkaProducer *kafka.Producer
-	redisClient   *redis.Client
+	redisClient   redis.RedisClient
 	config        *config.Config
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -43,7 +43,7 @@ func NewMessageHandler(
 	ctx context.Context,
 	connManager *ConnectionManager,
 	kafkaProducer *kafka.Producer,
-	redisClient *redis.Client,
+	redisClient redis.RedisClient,
 	cfg *config.Config,
 ) *MessageHandler {
 	handlerCtx, cancel := context.WithCancel(ctx)
@@ -181,8 +181,10 @@ func (h *MessageHandler) handleUpstreamMessage(conn *Connection, data []byte) er
 
 	// Set user ID from connection (prevent spoofing)
 	wsMsg.UserId = conn.UserID
-	wsMsg.GuildId = conn.GuildID
-	wsMsg.Timestamp = time.Now().Unix()
+	if conn.GuildID != "" {
+		wsMsg.GuildId = conn.GuildID
+	}
+	wsMsg.Timestamp = time.Now().UnixMilli()
 
 	// Serialize message
 	msgData, err := proto.Marshal(&wsMsg)
@@ -192,7 +194,7 @@ func (h *MessageHandler) handleUpstreamMessage(conn *Connection, data []byte) er
 
 	// Send to Kafka
 	topic := h.config.Kafka.Topics.Message
-	key := []byte(conn.GuildID) // Use guild ID as key for partitioning
+	key := []byte(wsMsg.GuildId) // Use guild ID as key for partitioning
 
 	_, _, err = h.kafkaProducer.Produce(h.ctx, topic, key, msgData)
 	if err != nil {
@@ -332,9 +334,9 @@ func (h *MessageHandler) handleDownstreamMessage(msg *redislib.Message) error {
 	successCount := 0
 	for _, conn := range connections {
 		// Don't send message back to the sender
-		if conn.UserID == wsMsg.UserId {
-			continue
-		}
+		// if conn.UserID == wsMsg.UserId {
+		// 	continue
+		// }
 
 		select {
 		case conn.Send <- msgData:

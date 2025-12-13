@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Go ChatRoom Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.4/dist/protobuf.min.js"></script>
     <style>
         :root {
             --primary-color: #5865F2;
@@ -165,9 +166,25 @@
             gap: 15px;
         }
 
+        .message-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .message-container.self {
+            align-items: flex-end;
+        }
+
+        .message-container.other {
+            align-items: flex-start;
+        }
+
         .message {
             display: flex;
             flex-direction: column;
+            max-width: 70%;
         }
 
         .message-header {
@@ -175,6 +192,10 @@
             align-items: baseline;
             gap: 8px;
             margin-bottom: 4px;
+        }
+
+        .message-container.self .message-header {
+            flex-direction: row-reverse;
         }
 
         .username {
@@ -190,6 +211,19 @@
         .content {
             color: #dcddde;
             word-wrap: break-word;
+            background-color: #40444b;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+
+        .message-container.self .content {
+            background-color: var(--primary-color);
+            color: white;
+            border-bottom-right-radius: 0;
+        }
+
+        .message-container.other .content {
+            border-bottom-left-radius: 0;
         }
 
         .input-area {
@@ -311,6 +345,31 @@
             socket: null
         };
 
+        // Protobuf Root Definition
+        let WSMessage;
+        const protoRoot = protobuf.Root.fromJSON({
+            nested: {
+                chat: {
+                    nested: {
+                        MessageType: { values: { TEXT: 0, SYSTEM: 1 } },
+                        WSMessage: {
+                            fields: {
+                                messageId: { type: "string", id: 1 },
+                                userId: { type: "string", id: 2 },
+                                guildId: { type: "string", id: 3 },
+                                content: { type: "string", id: 4 },
+                                seqId: { type: "int64", id: 5 },
+                                timestamp: { type: "int64", id: 6 },
+                                type: { type: "MessageType", id: 7 },
+                                username: { type: "string", id: 8 }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        WSMessage = protoRoot.lookupType("chat.WSMessage");
+
         // --- Auth Functions ---
 
         function showRegister() {
@@ -329,7 +388,7 @@
             const password = document.getElementById('reg-password').value;
 
             try {
-                const res = await fetch(`${API_BASE}/users/register`, {
+                const res = await fetch(`${API_BASE}/auth/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, email, password })
@@ -351,7 +410,7 @@
             const password = document.getElementById('login-password').value;
 
             try {
-                const res = await fetch(`${API_BASE}/users/login`, {
+                const res = await fetch(`${API_BASE}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
@@ -359,7 +418,7 @@
                 const data = await res.json();
                 if (res.ok) {
                     state.token = data.token;
-                    state.user = { id: data.user_id, username: data.username, email: data.email };
+                    state.user = data.user;
                     sessionStorage.setItem('token', state.token);
                     sessionStorage.setItem('user', JSON.stringify(state.user));
                     initApp();
@@ -395,12 +454,13 @@
             document.getElementById('current-userid').textContent = state.user.id;
 
             fetchGuildList(); // 从服务器获取最新的群组列表
-            connectWS();
+            // Don't connect WS here, wait for guild selection
         }
 
         async function fetchGuildList() {
             try {
-                const res = await fetch(`${API_BASE}/guilds/mine`, {
+                // Updated API endpoint to match backend router
+                const res = await fetch(`${API_BASE}/guilds`, {
                     headers: { 'Authorization': `Bearer ${state.token}` }
                 });
                 const data = await res.json();
@@ -417,40 +477,66 @@
             }
         }
 
-        function connectWS() {
-            if (state.socket) return;
+        function connectWS(guildId) {
+            if (state.socket) {
+                state.socket.close();
+                state.socket = null;
+            }
 
-            state.socket = new WebSocket(`${WS_BASE}?token=${state.token}`);
+            const url = `${WS_BASE}?token=${state.token}&guild_id=${guildId}`;
+            state.socket = new WebSocket(url);
+            state.socket.binaryType = "arraybuffer"; // Important for Protobuf
 
             state.socket.onopen = () => {
-                console.log('WebSocket Connected');
+                console.log(`WebSocket Connected (Guild: ${guildId})`);
             };
 
             state.socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                // data structure: { guild_id: 1, message: { ... } }
+                try {
+                    // Decode Protobuf message
+                    const buffer = new Uint8Array(event.data);
+                    const message = WSMessage.decode(buffer);
+                    const object = WSMessage.toObject(message, {
+                        longs: String,
+                        enums: String,
+                        bytes: String,
+                    });
 
-                if (data.guild_id === state.currentGuildId) {
-                    appendMessage(data.message);
-                } else {
-                    // 可以添加未读消息提示逻辑
-                    console.log(`Received message for guild ${data.guild_id}`);
+                    // Normalize object to match internal usage
+                    const normalizedMsg = {
+                        id: object.messageId,
+                        user_id: object.userId,
+                        guild_id: object.guildId,
+                        content: object.content,
+                        created_at: new Date(parseInt(object.timestamp)).toISOString(),
+                        sender_name: object.username || object.userId // Use username if available
+                    };
+
+                    if (normalizedMsg.guild_id === state.currentGuildId) {
+                        appendMessage(normalizedMsg);
+                    } else {
+                        console.log(`Received message for guild ${normalizedMsg.guild_id}`);
+                    }
+                } catch (e) {
+                    console.error("Failed to decode message:", e);
                 }
             };
 
             state.socket.onclose = () => {
                 console.log('WebSocket Disconnected');
                 state.socket = null;
-                // 简单的重连逻辑
-                setTimeout(connectWS, 3000);
+                // Only reconnect if we still have a current guild selected
+                if (state.currentGuildId === guildId) {
+                    setTimeout(() => connectWS(guildId), 3000);
+                }
             };
         }
 
         // --- Guild Functions ---
 
         async function createGuild() {
-            const topic = document.getElementById('new-guild-topic').value;
-            if (!topic) return alert('请输入群组名称');
+            const name = document.getElementById('new-guild-topic').value;
+            if (!name) return alert('请输入群组名称');
 
             try {
                 const res = await fetch(`${API_BASE}/guilds`, {
@@ -459,11 +545,11 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${state.token}`
                     },
-                    body: JSON.stringify({ topic })
+                    body: JSON.stringify({ name })
                 });
                 const data = await res.json();
                 if (res.ok) {
-                    alert(`群组 "${data.topic}" 创建成功 (ID: ${data.id})`);
+                    alert(`群组 "${data.name}" 创建成功 (ID: ${data.id})`);
                     // 刷新列表
                     await fetchGuildList();
                     // 重连 WebSocket 以更新订阅关系
@@ -515,25 +601,13 @@
         }
 
         async function createInvite() {
-            if (!state.currentGuildId) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/guilds/${state.currentGuildId}/invites`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${state.token}`
-                    }
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    const resultDiv = document.getElementById('invite-result');
-                    resultDiv.style.display = 'block';
-                    resultDiv.innerHTML = `<div class="invite-code-display">邀请码: ${data.code}</div>`;
-                } else {
-                    alert('生成邀请码失败: ' + data.error);
-                }
-            } catch (e) {
-                alert('请求错误: ' + e);
+            const guild = state.guilds.find(g => g.id === state.currentGuildId);
+            if (guild && guild.invite_code) {
+                const resultDiv = document.getElementById('invite-result');
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<div class="invite-code-display">邀请码: ${guild.invite_code}</div>`;
+            } else {
+                alert("无法获取当前群组的邀请码");
             }
         }
 
@@ -545,21 +619,24 @@
             state.guilds.forEach(g => {
                 const item = document.createElement('div');
                 item.className = `guild-item ${state.currentGuildId === g.id ? 'active' : ''}`;
-                item.textContent = `${g.topic} (ID: ${g.id})`;
-                item.onclick = () => selectGuild(g.id, g.topic);
+                item.textContent = `${g.name} (ID: ${g.id})`;
+                item.onclick = () => selectGuild(g.id, g.name);
                 list.appendChild(item);
             });
         }
 
-        async function selectGuild(id, topic) {
+        async function selectGuild(id, name) {
             state.currentGuildId = id;
-            document.getElementById('chat-title').textContent = `# ${topic}`;
-            document.getElementById('invite-btn').classList.remove('hidden');
+            document.getElementById('chat-title').textContent = `# ${name}`;
+            document.getElementById('invite-btn').classList.remove('hidden'); // Show invite button
             document.getElementById('invite-result').style.display = 'none';
             document.getElementById('message-input').disabled = false;
             document.getElementById('send-btn').disabled = false;
 
             renderGuildList(); // update active state
+
+            // Connect WebSocket for this guild
+            connectWS(id);
 
             // Load history
             await loadMessages(id);
@@ -570,15 +647,20 @@
             container.innerHTML = '<div style="text-align:center; color:#72767d;">加载中...</div>';
 
             try {
-                const res = await fetch(`${API_BASE}/guilds/${guildId}/messages?limit=50`, {
+                // Updated API endpoint to match backend router
+                const res = await fetch(`${API_BASE}/messages?guild_id=${guildId}&limit=50`, {
                     headers: { 'Authorization': `Bearer ${state.token}` }
                 });
                 const data = await res.json();
 
                 container.innerHTML = '';
-                if (res.ok && Array.isArray(data)) {
+                if (res.ok && data.messages) {
                     // API 返回的是倒序 (最新的在前)，我们需要正序显示
-                    data.reverse().forEach(msg => appendMessage(msg));
+                    data.messages.reverse().forEach(msg => {
+                        // Ensure sender_name exists (API returns user_id)
+                        msg.sender_name = msg.user_id;
+                        appendMessage(msg);
+                    });
                     scrollToBottom();
                 } else {
                     container.innerHTML = '<div style="text-align:center; color:#ed4245;">加载失败</div>';
@@ -591,19 +673,28 @@
 
         function appendMessage(msg) {
             const container = document.getElementById('messages-container');
+
+            // Create wrapper for alignment
+            const wrapper = document.createElement('div');
+            const isSelf = msg.user_id === state.user.id;
+            wrapper.className = `message-container ${isSelf ? 'self' : 'other'}`;
+
             const div = document.createElement('div');
             div.className = 'message';
 
             const date = new Date(msg.created_at).toLocaleString();
+            const sender = msg.sender_name || msg.user_id || 'Unknown';
 
             div.innerHTML = `
                 <div class="message-header">
-                    <span class="username">${msg.sender_name}</span>
+                    <span class="username">${sender}</span>
                     <span class="timestamp">${date}</span>
                 </div>
                 <div class="content">${escapeHtml(msg.content)}</div>
             `;
-            container.appendChild(div);
+
+            wrapper.appendChild(div);
+            container.appendChild(wrapper);
             scrollToBottom();
         }
 
@@ -624,8 +715,9 @@
                 const payload = {
                     guild_id: state.currentGuildId,
                     content: content,
-                    msg_type: 'text'
+                    type: 0 // TEXT (matches MessageType enum)
                 };
+                // Backend accepts JSON and unmarshals to Proto struct
                 state.socket.send(JSON.stringify(payload));
                 input.value = '';
             } else {

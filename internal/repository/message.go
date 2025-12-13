@@ -31,9 +31,11 @@ func (r *MessageRepository) FindByGuild(ctx context.Context, guildID string, aft
 
 	query := r.db.WithContext(ctx).Where("guild_id = ?", guildID)
 	if afterSeqID > 0 {
-		query = query.Where("seq_id > ?", afterSeqID)
+		query = query.Where("seq_id > ?", afterSeqID).Order("seq_id ASC")
+	} else {
+		query = query.Order("seq_id DESC")
 	}
-	err := query.Order("seq_id ASC").Limit(limit).Find(&messages).Error
+	err := query.Limit(limit).Find(&messages).Error
 	if err != nil {
 		return nil, err
 	}

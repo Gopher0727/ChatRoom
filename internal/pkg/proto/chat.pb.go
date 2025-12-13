@@ -78,6 +78,7 @@ type WSMessage struct {
 	SeqId         int64                  `protobuf:"varint,5,opt,name=seq_id,json=seqId,proto3" json:"seq_id,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,6,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Type          MessageType            `protobuf:"varint,7,opt,name=type,proto3,enum=chat.MessageType" json:"type,omitempty"`
+	Username      string                 `protobuf:"bytes,8,opt,name=username,proto3" json:"username,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -159,6 +160,13 @@ func (x *WSMessage) GetType() MessageType {
 		return x.Type
 	}
 	return MessageType_TEXT
+}
+
+func (x *WSMessage) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
 }
 
 // 历史消息请求
@@ -279,7 +287,7 @@ var File_internal_pkg_proto_chat_proto protoreflect.FileDescriptor
 
 const file_internal_pkg_proto_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x1dinternal/pkg/proto/chat.proto\x12\x04chat\"\xd4\x01\n" +
+	"\x1dinternal/pkg/proto/chat.proto\x12\x04chat\"\xf0\x01\n" +
 	"\tWSMessage\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x17\n" +
@@ -288,7 +296,8 @@ const file_internal_pkg_proto_chat_proto_rawDesc = "" +
 	"\acontent\x18\x04 \x01(\tR\acontent\x12\x15\n" +
 	"\x06seq_id\x18\x05 \x01(\x03R\x05seqId\x12\x1c\n" +
 	"\ttimestamp\x18\x06 \x01(\x03R\ttimestamp\x12%\n" +
-	"\x04type\x18\a \x01(\x0e2\x11.chat.MessageTypeR\x04type\"a\n" +
+	"\x04type\x18\a \x01(\x0e2\x11.chat.MessageTypeR\x04type\x12\x1a\n" +
+	"\busername\x18\b \x01(\tR\busername\"a\n" +
 	"\x0eHistoryRequest\x12\x19\n" +
 	"\bguild_id\x18\x01 \x01(\tR\aguildId\x12\x1e\n" +
 	"\vlast_seq_id\x18\x02 \x01(\x03R\tlastSeqId\x12\x14\n" +

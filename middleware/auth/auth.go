@@ -6,12 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/Gopher0727/ChatRoom/config"
 	"github.com/Gopher0727/ChatRoom/middleware/jwt"
 )
 
 // AuthMiddleware JWT 认证中间件
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(tokenManager *jwt.TokenManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var token string
 
@@ -38,16 +37,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 解析 token
-		cfg, err := config.LoadConfig("config.yaml")
-		if err != nil {
-			c.JSON(
-				http.StatusInternalServerError,
-				gin.H{"error": "服务器配置错误"},
-			)
-			c.Abort()
-			return
-		}
-		claims, err := jwt.NewTokenManager(cfg.JWT.Secret, cfg.JWT.ExpireHours, cfg.JWT.RefreshHours).ParseToken(token)
+		claims, err := tokenManager.ParseToken(token)
 		if err != nil {
 			c.JSON(
 				http.StatusUnauthorized,

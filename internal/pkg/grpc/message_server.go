@@ -13,11 +13,11 @@ import (
 // MessageServer 实现 MessageService gRPC 服务
 type MessageServer struct {
 	pb.UnimplementedMessageServiceServer
-	messageService service.MessageService
+	messageService service.IMessageService
 }
 
 // NewMessageServer 创建新的 Message gRPC 服务器
-func NewMessageServer(messageService service.MessageService) *MessageServer {
+func NewMessageServer(messageService service.IMessageService) *MessageServer {
 	return &MessageServer{
 		messageService: messageService,
 	}

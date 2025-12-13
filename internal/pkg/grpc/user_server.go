@@ -13,11 +13,11 @@ import (
 // UserServer 实现 UserService gRPC 服务
 type UserServer struct {
 	pb.UnimplementedUserServiceServer
-	userRepo repository.UserRepository
+	userRepo repository.IUserRepository
 }
 
 // NewUserServer 创建新的 User gRPC 服务器
-func NewUserServer(userRepo repository.UserRepository) *UserServer {
+func NewUserServer(userRepo repository.IUserRepository) *UserServer {
 	return &UserServer{
 		userRepo: userRepo,
 	}

@@ -1,0 +1,23 @@
+# 2025/12/13 12:54:04.056752 [TestProperty_KafkaConsumerRetryAndDLQ] [rapid] draw messageContent: "64"
+# 2025/12/13 12:54:10.595193 [TestProperty_KafkaConsumerRetryAndDLQ] 
+# 	Error Trace:	D:/Code/GoProjects/ChatRoom/internal/pkg/kafka/consumer_property_test.go:130
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:371
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:380
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:205
+# 	            				C:/Users/Gopher/go/pkg/mod/pgregory.net/rapid@v1.2.0/engine.go:120
+# 	            				D:/Code/GoProjects/ChatRoom/internal/pkg/kafka/consumer_property_test.go:73
+# 	            				C:/Users/Gopher/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.0.windows-amd64/src/runtime/asm_amd64.s:1693
+# 	Error:      	Should be true
+# 	Test:       	TestProperty_KafkaConsumerRetryAndDLQ
+# 	Messages:   	Message '64' should be sent to DLQ after max retries
+# 
+v0.4.8#648894149008922625
+0x777397834dcce
+0x0
+0x1c95278439ea1b
+0x6
+0xf133aeef54fd0
+0x0
+0x11a1e93c22ca40
+0x4
+0x12a8986833a92

@@ -12,6 +12,7 @@ import (
 type IUserRepository interface {
 	Create(ctx context.Context, user *model.User) error
 	FindByID(ctx context.Context, id string) (*model.User, error)
+	FindByIDs(ctx context.Context, ids []string) (map[string]*model.User, error)
 	FindByUsername(ctx context.Context, username string) (*model.User, error)
 	Update(ctx context.Context, user *model.User) error
 }
@@ -39,6 +40,21 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, 
 		return nil, err
 	}
 	return &user, nil
+}
+
+// FindByIDs finds users by IDs and returns a map of ID -> User
+func (r *UserRepository) FindByIDs(ctx context.Context, ids []string) (map[string]*model.User, error) {
+	var users []*model.User
+	err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+
+	userMap := make(map[string]*model.User)
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+	return userMap, nil
 }
 
 // FindByUsername finds a user by username

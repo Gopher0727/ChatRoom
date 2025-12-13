@@ -7,6 +7,4 @@
     },
     "files.autoSave": "onFocusChange",
     "go.testTimeout": "60s",
-    "protobuf.clangFormat.enabled": true,
-    "protobuf.clangFormat.path": "clang-format",
 }

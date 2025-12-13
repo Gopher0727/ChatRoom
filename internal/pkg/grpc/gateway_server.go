@@ -97,18 +97,18 @@ func (s *GatewayServer) BroadcastToGuild(ctx context.Context, req *pb.BroadcastR
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to marshal message: %v", err))
 	}
 
-	// 遍历所有连接，找到属于该 Guild 的用户
-	allConns := s.manager.GetAllConnections()
-	for userID, conn := range allConns {
+	// 获取该 Guild 的所有连接
+	connections := s.manager.GetConnectionsByGuild(req.GuildId)
+	for _, conn := range connections {
 		// 跳过排除的用户
-		if excludeMap[userID] {
+		if excludeMap[conn.UserID] {
 			continue
 		}
 
 		// 推送消息
 		err := conn.WriteMessage(websocket.BinaryMessage, data)
 		if err != nil {
-			failedUserIDs = append(failedUserIDs, userID)
+			failedUserIDs = append(failedUserIDs, conn.UserID)
 		} else {
 			deliveredCount++
 		}

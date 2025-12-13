@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/IBM/sarama"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -17,7 +19,9 @@ import (
 	"github.com/Gopher0727/ChatRoom/internal/handler"
 	"github.com/Gopher0727/ChatRoom/internal/model"
 	"github.com/Gopher0727/ChatRoom/internal/pkg/gateway"
+	grpcSrv "github.com/Gopher0727/ChatRoom/internal/pkg/grpc"
 	"github.com/Gopher0727/ChatRoom/internal/pkg/kafka"
+	pb "github.com/Gopher0727/ChatRoom/internal/pkg/proto"
 	"github.com/Gopher0727/ChatRoom/internal/pkg/redis"
 	"github.com/Gopher0727/ChatRoom/internal/repository"
 	"github.com/Gopher0727/ChatRoom/internal/service"
@@ -101,16 +105,20 @@ func main() {
 	// 初始化服务层
 	authService := service.NewAuthService(userRepo, tokenManager)
 	guildService := service.NewGuildService(guildRepo, userRepo)
-	messageService := service.NewMessageService(messageRepo, guildService, sfGen, redisClient)
+	messageService := service.NewMessageService(messageRepo, userRepo, guildService, sfGen, redisClient)
 
 	// 初始化处理器
 	authHandler := handler.NewAuthHandler(authService)
 	guildHandler := handler.NewGuildHandler(guildService)
 	messageHandler := handler.NewMessageHandler(messageService)
 
+	// Node ID generation (simple for now)
+	// TODO
+	nodeID := fmt.Sprintf("node-%d", cfg.Snowflake.WorkerID)
+
 	// 初始化 Gateway (WebSocket)
 	ctx := context.Background()
-	connManager := gateway.NewConnectionManager(ctx, &cfg.Websocket, redisClient)
+	connManager := gateway.NewConnectionManager(ctx, &cfg.Websocket, redisClient, nodeID)
 	gwMessageHandler := gateway.NewMessageHandler(ctx, connManager, kafkaProducer, redisClient, cfg)
 
 	// Start Gateway Subscriber (Subscribe to all guilds using pattern)
@@ -118,13 +126,71 @@ func main() {
 		log.Printf("Failed to start gateway subscriber: %v", err)
 	}
 
+	// 初始化 gRPC Server
+	grpcAddress := fmt.Sprintf(":%d", cfg.GRPC.Port)
+	baseGrpcServer, err := grpcSrv.NewServer(grpcAddress)
+	if err != nil {
+		log.Fatalf("Failed to init grpc server: %v", err)
+	}
+
+	gatewayServer := grpcSrv.NewGatewayServer(connManager, nodeID, grpcAddress)
+	guildServer := grpcSrv.NewGuildServer(guildRepo)
+	messageServer := grpcSrv.NewMessageServer(messageService)
+	userServer := grpcSrv.NewUserServer(userRepo)
+
+	// Register Services
+	s := baseGrpcServer.GetServer()
+	pb.RegisterGatewayServiceServer(s, gatewayServer)
+	pb.RegisterGuildServiceServer(s, guildServer)
+	pb.RegisterMessageServiceServer(s, messageServer)
+	pb.RegisterUserServiceServer(s, userServer)
+
+	// Start gRPC Server
+	go func() {
+		if err := baseGrpcServer.Start(); err != nil {
+			log.Fatalf("Failed to start grpc server: %v", err)
+		}
+	}()
+
+	// 初始化 Kafka Consumer
+	consumerHandler := func(ctx context.Context, msg *sarama.ConsumerMessage) error {
+		var wsMsg pb.WSMessage
+		if err := proto.Unmarshal(msg.Value, &wsMsg); err != nil {
+			return fmt.Errorf("failed to unmarshal message: %w", err)
+		}
+
+		// 调用 Service 处理消息 (持久化 + 推送 Redis)
+		_, err := messageService.SendMessage(ctx, wsMsg.UserId, wsMsg.GuildId, wsMsg.Content)
+		if err != nil {
+			log.Printf("Error processing message from kafka: %v", err)
+			return err
+		}
+		return nil
+	}
+
+	consumer, err := kafka.NewConsumer(&cfg.Kafka, []string{cfg.Kafka.Topics.Message}, consumerHandler)
+	if err != nil {
+		log.Printf("Failed to init kafka consumer: %v", err)
+	} else {
+		// 启动 Consumer
+		if err := consumer.Start(ctx); err != nil {
+			log.Printf("Failed to start kafka consumer: %v", err)
+		}
+		defer consumer.Stop()
+	}
+
 	// 配置并创建 Gin 引擎
 	gin.SetMode(cfg.Server.Mode)
 
 	r := gin.Default()
 
+	// 托管前端页面
+	// 这样访问 http://localhost:9000/ 就会显示 web/index.html
+	r.StaticFile("/", "./web/index.html")
+	r.StaticFile("/index.html", "./web/index.html")
+
 	// 设置 API 路由
-	api.RegisterRoutes(r, authHandler, guildHandler, messageHandler)
+	api.RegisterRoutes(r, tokenManager, authHandler, guildHandler, messageHandler)
 
 	// 设置 WebSocket 路由
 	upgrader := websocket.Upgrader{

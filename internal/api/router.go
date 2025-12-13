@@ -5,11 +5,13 @@ import (
 
 	"github.com/Gopher0727/ChatRoom/internal/handler"
 	middlewares "github.com/Gopher0727/ChatRoom/middleware/auth"
+	"github.com/Gopher0727/ChatRoom/middleware/jwt"
 )
 
 // RegisterRoutes registers all API routes
 func RegisterRoutes(
 	r *gin.Engine,
+	tokenManager *jwt.TokenManager,
 	authHandler *handler.AuthHandler,
 	guildHandler *handler.GuildHandler,
 	messageHandler *handler.MessageHandler,
@@ -26,7 +28,7 @@ func RegisterRoutes(
 
 	// Protected routes
 	protected := api.Group("/")
-	protected.Use(middlewares.AuthMiddleware())
+	protected.Use(middlewares.AuthMiddleware(tokenManager))
 	{
 		// Guild routes
 		guilds := protected.Group("/guilds")

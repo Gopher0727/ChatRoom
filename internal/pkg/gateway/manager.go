@@ -15,8 +15,6 @@ import (
 // ConnectionManager manages all WebSocket connections for the gateway.
 // It provides thread-safe operations for adding, removing, and retrieving connections.
 // It also handles heartbeat monitoring to detect and clean up dead connections.
-//
-// Validates: Requirements 1.3, 4.2, 4.3, 6.4
 type ConnectionManager struct {
 	// connections maps userID to their Connection
 	connections map[string]*Connection
@@ -28,7 +26,10 @@ type ConnectionManager struct {
 	config *config.WebsocketConfig
 
 	// redisClient is used to update user online status
-	redisClient *redis.Client
+	redisClient redis.RedisClient
+
+	// nodeID is the unique identifier for this gateway node
+	nodeID string
 
 	// ctx is the manager context
 	ctx context.Context
@@ -46,16 +47,18 @@ type ConnectionManager struct {
 //   - ctx: Parent context for the manager
 //   - cfg: WebSocket configuration
 //   - redisClient: Redis client for online status management
+//   - nodeID: Unique identifier for this gateway node
 //
 // Returns:
 //   - *ConnectionManager: The initialized connection manager
-func NewConnectionManager(ctx context.Context, cfg *config.WebsocketConfig, redisClient *redis.Client) *ConnectionManager {
+func NewConnectionManager(ctx context.Context, cfg *config.WebsocketConfig, redisClient redis.RedisClient, nodeID string) *ConnectionManager {
 	managerCtx, cancel := context.WithCancel(ctx)
 
 	cm := &ConnectionManager{
 		connections: make(map[string]*Connection),
 		config:      cfg,
 		redisClient: redisClient,
+		nodeID:      nodeID,
 		ctx:         managerCtx,
 		cancel:      cancel,
 	}
@@ -79,8 +82,6 @@ func NewConnectionManager(ctx context.Context, cfg *config.WebsocketConfig, redi
 // Returns:
 //   - *Connection: The created connection object
 //   - error: Any error encountered during addition
-//
-// Validates: Requirements 1.3, 6.4 (WebSocket connection establishment, multiple windows)
 func (cm *ConnectionManager) AddConnection(userID, guildID string, conn *websocket.Conn) (*Connection, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -97,7 +98,7 @@ func (cm *ConnectionManager) AddConnection(userID, guildID string, conn *websock
 	// Update Redis online status
 	// TTL is set to 2x heartbeat interval to allow for network delays
 	ttl := time.Duration(cm.config.HeartbeatInterval*2) * time.Second
-	if err := cm.redisClient.SetUserOnline(cm.ctx, userID, ttl); err != nil {
+	if err := cm.redisClient.SetUserOnline(cm.ctx, userID, cm.nodeID, ttl); err != nil {
 		// Log error but don't fail the connection
 		// This is a degraded mode where online status tracking is unavailable
 		fmt.Printf("Warning: failed to set user %s online in Redis: %v\n", userID, err)
@@ -118,8 +119,6 @@ func (cm *ConnectionManager) AddConnection(userID, guildID string, conn *websock
 //
 // Returns:
 //   - error: Any error encountered during removal
-//
-// Validates: Requirements 12.1 (Connection disconnect resource cleanup)
 func (cm *ConnectionManager) RemoveConnection(userID string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -168,8 +167,6 @@ func (cm *ConnectionManager) RemoveConnection(userID string) error {
 // Returns:
 //   - *Connection: The connection object, or nil if not found
 //   - bool: true if the connection exists, false otherwise
-//
-// Validates: Requirements 4.2 (Connection lookup accuracy)
 func (cm *ConnectionManager) GetConnection(userID string) (*Connection, bool) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -204,8 +201,6 @@ func (cm *ConnectionManager) GetAllConnections() map[string]*Connection {
 //
 // Returns:
 //   - []*Connection: A slice of connections for the guild
-//
-// Validates: Requirements 4.2, 4.3 (Connection lookup, message push to online users)
 func (cm *ConnectionManager) GetConnectionsByGuild(guildID string) []*Connection {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -252,11 +247,14 @@ func (cm *ConnectionManager) monitorHeartbeats() {
 // checkHeartbeats checks all connections for heartbeat timeouts and closes dead ones.
 func (cm *ConnectionManager) checkHeartbeats(timeout time.Duration) {
 	cm.mu.RLock()
-	// Collect dead connections
+	// Collect dead connections and active connections
 	var deadConnections []string
+	var activeConnections []string
 	for userID, conn := range cm.connections {
 		if !conn.IsAlive(timeout) {
 			deadConnections = append(deadConnections, userID)
+		} else {
+			activeConnections = append(activeConnections, userID)
 		}
 	}
 	cm.mu.RUnlock()
@@ -265,6 +263,15 @@ func (cm *ConnectionManager) checkHeartbeats(timeout time.Duration) {
 	for _, userID := range deadConnections {
 		fmt.Printf("Removing dead connection for user %s (heartbeat timeout)\n", userID)
 		cm.RemoveConnection(userID)
+	}
+
+	// Refresh active connections in Redis
+	// We do this without holding the lock to avoid blocking other operations
+	ttl := time.Duration(cm.config.HeartbeatInterval*2) * time.Second
+	for _, userID := range activeConnections {
+		if err := cm.redisClient.SetUserOnline(cm.ctx, userID, cm.nodeID, ttl); err != nil {
+			fmt.Printf("Failed to refresh online status for user %s: %v\n", userID, err)
+		}
 	}
 }
 

@@ -140,6 +140,7 @@ func (c *Connection) Close() error {
 func (c *Connection) IsClosed() bool {
 	c.closedMu.RLock()
 	defer c.closedMu.RUnlock()
+
 	return c.closed
 }
 
@@ -148,6 +149,7 @@ func (c *Connection) IsClosed() bool {
 func (c *Connection) UpdateHeartbeat() {
 	c.heartbeatMu.Lock()
 	defer c.heartbeatMu.Unlock()
+
 	c.lastHeartbeat = time.Now()
 }
 
@@ -155,6 +157,7 @@ func (c *Connection) UpdateHeartbeat() {
 func (c *Connection) GetLastHeartbeat() time.Time {
 	c.heartbeatMu.RLock()
 	defer c.heartbeatMu.RUnlock()
+
 	return c.lastHeartbeat
 }
 

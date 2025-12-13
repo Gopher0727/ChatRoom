@@ -47,6 +47,7 @@ type IMessageService interface {
 // MessageService implements the MessageService interface
 type MessageService struct {
 	messageRepo  repository.IMessageRepository
+	userRepo     repository.IUserRepository
 	guildService IGuildService
 	snowflakeGen *snowflake.Generator
 	redisClient  redis.RedisClient
@@ -55,12 +56,14 @@ type MessageService struct {
 // NewMessageService creates a new MessageService instance
 func NewMessageService(
 	messageRepo repository.IMessageRepository,
+	userRepo repository.IUserRepository,
 	guildService IGuildService,
 	snowflakeGen *snowflake.Generator,
 	redisClient redis.RedisClient,
 ) IMessageService {
 	return &MessageService{
 		messageRepo:  messageRepo,
+		userRepo:     userRepo,
 		guildService: guildService,
 		snowflakeGen: snowflakeGen,
 		redisClient:  redisClient,
@@ -103,11 +106,23 @@ func (s *MessageService) SendMessage(ctx context.Context, userID, guildID, conte
 
 	// Create message object
 	message := &model.Message{
-		ID:      messageID,
-		UserID:  userID,
-		GuildID: guildID,
-		Content: content,
-		SeqID:   seqID,
+		ID:        messageID,
+		UserID:    userID,
+		GuildID:   guildID,
+		Content:   content,
+		SeqID:     seqID,
+		CreatedAt: time.Now(),
+	}
+
+	// Fetch username for real-time push
+	user, err := s.userRepo.FindByID(ctx, userID)
+	var username string
+	if err != nil {
+		// Log error but continue, username will be empty
+		fmt.Printf("WARNING: failed to fetch user info for message push: %v\n", err)
+		username = "Unknown"
+	} else {
+		username = user.UserName
 	}
 
 	// Parallel write to PostgreSQL and Redis Pub/Sub
@@ -125,7 +140,7 @@ func (s *MessageService) SendMessage(ctx context.Context, userID, guildID, conte
 	// Publish to Redis Pub/Sub
 	go func() {
 		defer wg.Done()
-		pubsubErr = s.publishMessage(ctx, message)
+		pubsubErr = s.publishMessage(ctx, message, username)
 	}()
 
 	wg.Wait()
@@ -190,7 +205,7 @@ func (s *MessageService) BatchGetMessages(ctx context.Context, messageIDs []stri
 
 // publishMessage publishes a message to Redis Pub/Sub
 // The message is serialized using Protobuf and published to a guild-specific channel
-func (s *MessageService) publishMessage(ctx context.Context, message *model.Message) error {
+func (s *MessageService) publishMessage(ctx context.Context, message *model.Message, username string) error {
 	// Convert to Protobuf message
 	pbMessage := &pb.WSMessage{
 		MessageId: message.ID,
@@ -200,6 +215,7 @@ func (s *MessageService) publishMessage(ctx context.Context, message *model.Mess
 		SeqId:     message.SeqID,
 		Timestamp: time.Now().UnixMilli(),
 		Type:      pb.MessageType_TEXT,
+		Username:  username,
 	}
 
 	// Serialize to bytes

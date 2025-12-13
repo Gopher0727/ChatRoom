@@ -13,11 +13,11 @@ import (
 // GuildServer 实现 GuildService gRPC 服务
 type GuildServer struct {
 	pb.UnimplementedGuildServiceServer
-	guildRepo repository.GuildRepository
+	guildRepo repository.IGuildRepository
 }
 
 // NewGuildServer 创建新的 Guild gRPC 服务器
-func NewGuildServer(guildRepo repository.GuildRepository) *GuildServer {
+func NewGuildServer(guildRepo repository.IGuildRepository) *GuildServer {
 	return &GuildServer{
 		guildRepo: guildRepo,
 	}
