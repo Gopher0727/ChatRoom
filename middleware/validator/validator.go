@@ -46,7 +46,7 @@ func ValidateEmail(email string) bool {
 
 // GenerateInviteCode 生成邀请码（6位随机字符串）
 func GenerateInviteCode() string {
-	hash := sha256.Sum256([]byte(fmt.Sprintf("%d%d", time.Now().Unix(), time.Now().Nanosecond())))
+	hash := sha256.Sum256(fmt.Appendf(nil, "%d%d", time.Now().Unix(), time.Now().Nanosecond()))
 	code := fmt.Sprintf("%x", hash)
 	return strings.ToUpper(code[:6])
 }

@@ -20,6 +20,7 @@ type RedisClient interface {
 	RemoveUserOnline(ctx context.Context, userID string) error
 	Publish(ctx context.Context, channel string, message any) error
 	Subscribe(ctx context.Context, channels ...string) (*redis.PubSub, error)
+	PSubscribe(ctx context.Context, patterns ...string) (*redis.PubSub, error)
 	Set(ctx context.Context, key string, value any, expiration time.Duration) error
 	Get(ctx context.Context, key string) (string, error)
 	Del(ctx context.Context, keys ...string) error
@@ -115,6 +116,16 @@ func (c *Client) Subscribe(ctx context.Context, channels ...string) (*redis.PubS
 	_, err := pubsub.Receive(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to subscribe to channels: %w", err)
+	}
+	return pubsub, nil
+}
+
+func (c *Client) PSubscribe(ctx context.Context, patterns ...string) (*redis.PubSub, error) {
+	pubsub := c.client.PSubscribe(ctx, patterns...)
+	// Wait for confirmation that subscription is created
+	_, err := pubsub.Receive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to psubscribe to patterns: %w", err)
 	}
 	return pubsub, nil
 }

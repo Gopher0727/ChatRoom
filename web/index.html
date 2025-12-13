@@ -297,8 +297,11 @@
     </div>
 
     <script>
-        const API_BASE = 'http://127.0.0.1:9000/api/v1';
-        const WS_BASE = 'ws://127.0.0.1:9000/ws';
+        // Use relative path for API to go through Nginx proxy
+        const API_BASE = '/api/v1';
+        // Use current host for WebSocket to go through Nginx proxy
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const WS_BASE = `${protocol}//${window.location.host}/ws`;
 
         let state = {
             token: sessionStorage.getItem('token') || null,
