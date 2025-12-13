@@ -82,7 +82,7 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 		}
 	}
 
-	messages, hasMore, err := h.messageService.GetMessages(c.Request.Context(), guildID, lastSeqID, limit)
+	messages, hasMore, err := h.messageService.GetMessagesWithUser(c.Request.Context(), guildID, lastSeqID, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve messages"})
 		return

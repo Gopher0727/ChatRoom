@@ -37,10 +37,17 @@ type GetMessagesRequest struct {
 	Limit     int    `json:"limit"`
 }
 
+// MessageWithUser represents a message with user info
+type MessageWithUser struct {
+	*model.Message
+	Username string `json:"username"`
+}
+
 // IMessageService defines the interface for message operations
 type IMessageService interface {
 	SendMessage(ctx context.Context, userID, guildID, content string) (*model.Message, error)
 	GetMessages(ctx context.Context, guildID string, lastSeqID int64, limit int) ([]*model.Message, bool, error)
+	GetMessagesWithUser(ctx context.Context, guildID string, lastSeqID int64, limit int) ([]*MessageWithUser, bool, error)
 	BatchGetMessages(ctx context.Context, messageIDs []string) ([]*model.Message, error)
 }
 
@@ -182,6 +189,51 @@ func (s *MessageService) GetMessages(ctx context.Context, guildID string, lastSe
 	}
 
 	return messages, hasMore, nil
+}
+
+// GetMessagesWithUser retrieves messages with user info
+func (s *MessageService) GetMessagesWithUser(ctx context.Context, guildID string, lastSeqID int64, limit int) ([]*MessageWithUser, bool, error) {
+	messages, hasMore, err := s.GetMessages(ctx, guildID, lastSeqID, limit)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if len(messages) == 0 {
+		return []*MessageWithUser{}, false, nil
+	}
+
+	// Collect user IDs
+	userIDs := make([]string, 0, len(messages))
+	seen := make(map[string]bool)
+	for _, msg := range messages {
+		if !seen[msg.UserID] {
+			userIDs = append(userIDs, msg.UserID)
+			seen[msg.UserID] = true
+		}
+	}
+
+	// Batch fetch users
+	userMap, err := s.userRepo.FindByIDs(ctx, userIDs)
+	if err != nil {
+		fmt.Printf("WARNING: failed to fetch users for messages: %v\n", err)
+		// Continue without usernames
+		userMap = make(map[string]*model.User)
+	}
+
+	// Assemble result
+	result := make([]*MessageWithUser, len(messages))
+	for i, msg := range messages {
+		username := "Unknown"
+		if user, ok := userMap[msg.UserID]; ok {
+			username = user.UserName
+		}
+		result[i] = &MessageWithUser{
+			Message:  msg,
+			Username: username,
+		}
+	}
+
+	return result, hasMore, nil
 }
 
 // BatchGetMessages retrieves multiple messages by their IDs

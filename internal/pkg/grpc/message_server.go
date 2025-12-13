@@ -66,7 +66,7 @@ func (s *MessageServer) GetHistory(ctx context.Context, req *pb.HistoryRequest) 
 	}
 
 	// 调用业务层获取历史消息
-	messages, hasMore, err := s.messageService.GetMessages(ctx, req.GuildId, req.LastSeqId, int(req.Limit))
+	messages, hasMore, err := s.messageService.GetMessagesWithUser(ctx, req.GuildId, req.LastSeqId, int(req.Limit))
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -82,6 +82,7 @@ func (s *MessageServer) GetHistory(ctx context.Context, req *pb.HistoryRequest) 
 			SeqId:     msg.SeqID,
 			Timestamp: msg.CreatedAt.Unix(),
 			Type:      pb.MessageType_TEXT,
+			Username:  msg.Username,
 		}
 	}
 

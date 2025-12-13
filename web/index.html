@@ -619,7 +619,7 @@
             state.guilds.forEach(g => {
                 const item = document.createElement('div');
                 item.className = `guild-item ${state.currentGuildId === g.id ? 'active' : ''}`;
-                item.textContent = `${g.name} (ID: ${g.id})`;
+                item.textContent = `${g.name}`;
                 item.onclick = () => selectGuild(g.id, g.name);
                 list.appendChild(item);
             });
@@ -658,7 +658,7 @@
                     // API 返回的是倒序 (最新的在前)，我们需要正序显示
                     data.messages.reverse().forEach(msg => {
                         // Ensure sender_name exists (API returns user_id)
-                        msg.sender_name = msg.user_id;
+                        msg.sender_name = msg.username || msg.user_id;
                         appendMessage(msg);
                     });
                     scrollToBottom();
