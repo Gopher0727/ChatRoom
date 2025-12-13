@@ -33,29 +33,91 @@
 
 ### 消息路由
 
-1. 实时消息发送链路 (Write Path)
+1. 上行消息 (Write Path)
     - 客户端 A 发送 WebSocket 消息至 Gateway。
-    - Gateway 将消息封装后 Produce 到 Kafka。
+    - Gateway 将消息封装后投递到 Kafka。
     - Consumer 消费 kafka 消息，调用 Service。
-    - Service 请求 Redis 获取 Seq ID。
-    - Service 并行写入 PostgreSQL (持久化、索引)。
-    - Service 将处理后的消息 Publish 到 Redis Pub/Sub。
-2. 实时消息推送链路 (Read Path)
-    - 全量广播给所有 Gateway 节点，由 Gateway 节点自行判断本地有哪些连接属于该群
+    - Service 处理业务逻辑（生成 ID、验证权限）
+    - 并行写入 PostgreSQL 和发布到 Redis Pub/Sub
+```
+Client → Gateway → Kafka → Consumer → Service → PostgreSQL + Redis Pub/Sub
+```
+
+2. 下行消息 (Read Path)
+    - 全量广播给所有 Gateway 节点
         - Gateway 订阅 Redis Pub/Sub 对应频道。
+    - Gateway 查找本地 WebSocket 连接
         - 收到通知后，Gateway 根据用户 ID 查找本地维护的 WebSocket 连接。
         - 通过 WebSocket 将消息 Push 给**在线的**客户端。
+```
+Service → Redis Pub/Sub → Gateway → Client
+```
+
 3. 历史消息同步 (Sync Path)
-    - 客户端 重新上线或断线重连。
-    - 发送 HTTP 请求带上本地最新的 Last_Seq_ID 给 API Server。
-    - API Server 查询 PostgreSQL 中大于该 ID 的消息列表。
-    - 返回消息列表，客户端补齐缺失消息。
+    - 客户端重新上线或断线重连，发送 HTTP 请求（带 Last_Seq_ID）
+    - Service 查询 PostgreSQL，返回增量消息列表
+```
+Client → API Gateway → Service → PostgreSQL → Client
+```
 
-## 通信协议
 
-- WebSocket, HTTP/REST
-- gRPC
-- Protobuf
+### 生产环境部署
+
+**Kubernetes 部署：**
+
+- 使用 Deployment 管理无状态服务（API、Consumer）
+- 使用 StatefulSet 管理有状态服务（Gateway）
+- 使用 Service 进行服务发现
+- 使用 Ingress 管理外部访问
+- 使用 ConfigMap 管理配置
+- 使用 Secret 管理敏感信息
+
+**监控与告警：**
+
+- Prometheus + Grafana 监控系统指标
+- ELK Stack 收集和分析日志
+- Jaeger 进行分布式追踪
+- AlertManager 发送告警通知
+
+
+### 核心特性
+
+- 基于 WebSocket 的实时双向通信
+- 分布式架构，支持水平扩展
+- kafka 消息队列解耦，保证高可用
+- 雪花算法生成全局唯一消息 ID
+- gRPC + Protobuf (服务间通信)
+- 前端基于 Fetch API
+- Nginx 反代 + 负载均衡
+- Docker 容器化
+
+#### 一致性哈希实现动态扩缩容
+
+使用一致性哈希环管理 Gateway 节点：
+
+```
+         Node A (120°)
+              ╱
+             ╱
+            ╱
+   ────────●────────
+  ╱                 ╲
+ ╱                   ╲
+●                     ●
+Node C (240°)    Node B (0°)
+```
+
+- 用户连接根据 UserID 哈希到特定 Gateway
+- 节点增删时，只影响相邻节点的部分连接
+- 加入虚拟节点提高负载均衡
+
+
+#### 服务发现
+
+- 使用 Redis 或 etcd 存储 Gateway 节点列表
+- Gateway 启动时注册自己的地址和端口
+- 定期发送心跳保持在线状态
+- 节点下线时自动从列表移除
 
 
 ## 性能指标
